@@ -60,18 +60,30 @@ impl<'a> CellInfo<'a> {
         drop(dep_tables);
 
         if let Some(value) = self.result_table.get(&req) {
+            log::trace!(
+                "Value for {} requested by {} is immediately available: {value}",
+                req,
+                self.pos
+            );
             return Ok(value.clone());
         }
 
         let Some(cache) = self.cache_table.get(&req) else {
+            log::trace!("Value for {} requested by {} is empty", req, self.pos);
             return Ok(TableValue::Empty);
         };
 
-        Ok(cache
+        let value = cache
             .read()
             .await
             .clone()
-            .expect("WriteGuard on the cache can only be dropped after the cache is evaluated"))
+            .expect("WriteGuard on the cache can only be dropped after the cache is evaluated");
+        log::trace!(
+            "Awaited Value for {} requested by {}: {value}",
+            req,
+            self.pos
+        );
+        Ok(value)
     }
 }
 

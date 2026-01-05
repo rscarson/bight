@@ -1,6 +1,6 @@
 use std::{marker::PhantomData, pin::Pin, sync::Arc};
 
-use mlua::{FromLua, FromLuaMulti, IntoLua, IntoLuaMulti, Lua};
+use mlua::{FromLua, FromLuaMulti, IntoLua, IntoLuaMulti, Lua, Value};
 
 use crate::{
     evaluator::{TableError, TableValue, interaction::CellInfo},
@@ -8,61 +8,11 @@ use crate::{
 };
 
 type TableLuaBoxFuture<'a, V> = Pin<Box<dyn Future<Output = mlua::Result<V>> + Send + Sync + 'a>>;
-fn global_cell_access<'a>(
-    info: &'a CellInfo<'a>,
-) -> impl Fn(Lua, (mlua::Value, CellPos)) -> TableLuaBoxFuture<'a, TableValue> {
-    move |_, (_, pos): (mlua::Value, CellPos)| {
-        Box::pin(async move { Ok(info.get(pos).await.into()) })
-    }
-}
-
 type TableBoxFn<'a, T, V> = Box<dyn Fn(Lua, T) -> TableLuaBoxFuture<'a, V> + Send + Sync + 'a>;
 
-fn sum<'a>(info: &'a CellInfo<'a>) -> TableBoxFn<'a, SlicePos, TableValue> {
-    Box::new(move |_lua, pos: SlicePos| {
-        Box::pin({
-            async move {
-                dbg!(pos);
-                let mut sum: f64 = 0.0;
-                for row in pos.rows() {
-                    for column in pos.columns() {
-                        dbg!(row, column);
-                        let cell = pos.shift_to_pos((column, row).into()).unwrap();
-                        let res = info.get(cell).await;
-                        let Ok(val) = res else {
-                            return Ok(res.into());
-                        };
-                        if val.is_err() {
-                            return Ok(val);
-                        }
-                        let TableValue::Number(val) = val else {
-                            continue;
-                        };
-                        sum += val;
-                    }
-                }
-                Ok(TableValue::from_number(sum))
-            }
-        })
-    })
+fn get<'a>(info: &'a CellInfo<'a>) -> TableBoxFn<'a, CellPos, TableValue> {
+    Box::new(move |_lua, pos: CellPos| Box::pin(async move { Ok(info.get(pos).await.into()) }))
 }
-
-fn rel_cell<'a>(info: &'a CellInfo<'a>) -> TableBoxFn<'a, (i64, i64), TableValue> {
-    Box::new(move |_lua, (shx, shy)| {
-        Box::pin({
-            async move {
-                let x = info.pos().x as i64 + shx;
-                let y = info.pos().y as i64 + shy;
-                if x < 0 || y < 0 {
-                    Ok(TableValue::Empty)
-                } else {
-                    Ok(info.get((x as usize, y as usize).into()).await.into())
-                }
-            }
-        })
-    })
-}
-
 fn pos<'a>(info: &'a CellInfo<'a>) -> TableBoxFn<'a, (), (usize, usize)> {
     Box::new(move |_lua, _| {
         Box::pin({
@@ -106,14 +56,6 @@ impl<'a> CellEvaluator<'a> {
     }
 
     async fn evaluate(&mut self, source: &str) -> mlua::Result<TableValue> {
-        let global_cell_access = self
-            .lua
-            .create_async_function(global_cell_access(self.info))
-            .unwrap();
-        let metatable = self.lua.create_table().expect("no error is documented");
-        metatable.set("__index", global_cell_access).unwrap();
-        self.lua.globals().set_metatable(Some(metatable));
-
         let chunk = self.lua.load(source);
         chunk.eval_async::<TableValue>().await
     }
@@ -126,11 +68,8 @@ pub async fn evaluate<'a>(source: &str, info: &'a CellInfo<'a>) -> TableValue {
         .expect("Prelude is valid and known at compile time");
     let mut ev = CellEvaluator::new(info, lua);
 
-    ev.add_global_fn("SUM", sum);
-    // ev.add_global_fn("POSX", self_x);
-    // ev.add_global_fn("POSY", self_y);
     ev.add_global_fn("POS", pos);
-    ev.add_global_fn("REL", rel_cell);
+    ev.add_global_fn("GET", get);
 
     let res = ev.evaluate(source).await;
 
@@ -163,19 +102,67 @@ impl IntoLua for TableValue {
     }
 }
 
-impl FromLua for CellPos {
-    fn from_lua(value: mlua::Value, _lua: &Lua) -> mlua::Result<Self> {
+fn try_lua_to_usize(value: &mlua::Value) -> Option<usize> {
+    Some(match value {
+        Value::Integer(x) if *x >= 0 => *x as usize,
+        Value::Number(x) if x.is_normal() && !x.is_sign_negative() => x.next_down() as usize,
+        _ => return None,
+    })
+}
+
+impl FromLuaMulti for CellPos {
+    fn from_lua_multi(values: mlua::MultiValue, _lua: &Lua) -> mlua::Result<Self> {
+        const ERROR_MESSAGE: &str = "CellPos can be created from a string in format [A-Za-z]+[0-9]+, 2 non-negative numbers, or a table with x, col, column or 1st element for x coordinate and y, row, or 2nd element for y coordinate";
         let err = Err(mlua::Error::FromLuaConversionError {
             from: "",
             to: "CellPos".into(),
-            message: Some("CellPos can be created from a string in format [A-Za-z]+[0-9]+".into()),
+            message: Some(ERROR_MESSAGE.into()),
         });
 
-        let mlua::Value::String(pos) = value else {
-            return err;
+        let pos = match values.len() {
+            0 => return err,
+            1 => {
+                let value = values.into_iter().next().unwrap();
+                match value {
+                    Value::Table(t) => {
+                        let Ok(x) = t
+                            .get("x")
+                            .or_else(|_| t.get("col"))
+                            .or_else(|_| t.get("column"))
+                            .or_else(|_| t.get(1))
+                        else {
+                            return err;
+                        };
+
+                        let Ok(y) = t.get("y").or_else(|_| t.get("row")).or_else(|_| t.get(2))
+                        else {
+                            return err;
+                        };
+                        let (Some(x), Some(y)) = (try_lua_to_usize(&x), try_lua_to_usize(&y))
+                        else {
+                            return err;
+                        };
+                        CellPos::from((x, y))
+                    }
+                    Value::String(s) => {
+                        let Ok(pos) = s.to_str() else { return err };
+                        let Ok(pos) = pos.parse::<CellPos>() else {
+                            return err;
+                        };
+                        pos
+                    }
+                    _ => return err,
+                }
+            }
+            2.. => {
+                let mut iter = values.into_iter();
+                let (x, y) = (iter.next().unwrap(), iter.next().unwrap());
+                let (Some(x), Some(y)) = (try_lua_to_usize(&x), try_lua_to_usize(&y)) else {
+                    return err;
+                };
+                CellPos::from((x, y))
+            }
         };
-        let Ok(pos) = pos.to_str() else { return err };
-        let Ok(pos) = pos.parse() else { return err };
 
         Ok(pos)
     }
