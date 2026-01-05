@@ -131,15 +131,13 @@ impl FromLuaMulti for CellPos {
                             .or_else(|_| t.get("column"))
                             .or_else(|_| t.get(1))
                         else {
+                            log::trace!("could find x value");
                             return err;
                         };
 
                         let Ok(y) = t.get("y").or_else(|_| t.get("row")).or_else(|_| t.get(2))
                         else {
-                            return err;
-                        };
-                        let (Some(x), Some(y)) = (try_lua_to_usize(&x), try_lua_to_usize(&y))
-                        else {
+                            log::trace!("could find y value");
                             return err;
                         };
                         CellPos::from((x, y))
