@@ -1,7 +1,6 @@
 pub mod app;
 pub mod callback;
 pub mod clipboard;
-pub mod csv;
 pub mod editor;
 pub mod evaluator;
 pub mod file;

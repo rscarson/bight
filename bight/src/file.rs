@@ -1,100 +1,59 @@
+pub mod bight;
+pub mod csv;
+pub use bight::load as load_bight;
+pub use csv::slice_to_csv_string;
 use std::path::Path;
 
-use rkyv::{
-    Archive, Deserialize, Serialize, access, deserialize,
-    rancor::{self},
-    to_bytes,
-};
+pub use bight::BightFile;
 
-use crate::evaluator::SourceTable;
-
-#[derive(Archive, Serialize, Deserialize)]
-#[repr(C)]
-pub struct BightHeader {
-    version: u64,
+#[derive(Debug, thiserror::Error)]
+pub enum DeserializationError {
+    #[error("The length of the data is less that the minimum requirement for the header")]
+    InvalidLength,
+    #[error(transparent)]
+    ArchiveError(#[from] rkyv::rancor::Error),
+    #[error("Data contains invalid UTF-8")]
+    StringError,
+    #[error("Bight file version {0} is not supported")]
+    UnsupportedVersion(u64),
 }
-
-const PADDED_HEADER_SIZE: usize = 1024;
-const RESERVED_SIZE: usize = PADDED_HEADER_SIZE - std::mem::size_of::<BightHeader>();
-
-#[derive(Archive, Serialize, Deserialize)]
-#[repr(C)]
-struct BightHeaderPadded {
-    header: BightHeader,
-    _reserved: [u8; RESERVED_SIZE],
-}
-
-impl BightHeaderPadded {
-    fn new(version: u64) -> Self {
-        Self {
-            header: BightHeader { version },
-            _reserved: [0; RESERVED_SIZE],
-        }
-    }
-}
-
-#[derive(Archive, Serialize, Deserialize)]
-pub struct BightFileV1 {
-    source: SourceTable,
-}
-
-impl BightFileV1 {
-    const VERSION: u64 = 2;
-}
-
 #[derive(Debug, thiserror::Error)]
 pub enum FileLoadError {
     #[error(transparent)]
     IoErrror(#[from] std::io::Error),
-    // #[error("The given file was invalid")]
+    #[error("The filetype {0} is not supported")]
+    UnsupportedFiletype(String),
     #[error(transparent)]
-    DeserializationError(#[from] rancor::Error),
-    #[error("Given data is not a valid Bight file")]
-    DataError,
-    #[error("Bight file version {0} is not supported")]
-    UnsupportedVersion(u64),
-}
-
-pub fn load(path: &Path) -> Result<SourceTable, FileLoadError> {
-    let bytes = std::fs::read(path)?;
-
-    if bytes.is_empty() {
-        return Ok(SourceTable::new());
-    }
-
-    if bytes.len() < PADDED_HEADER_SIZE {
-        return Err(FileLoadError::DataError);
-    }
-
-    let Some((header_bytes, data_bytes)) = bytes.split_at_checked(PADDED_HEADER_SIZE) else {
-        return Err(FileLoadError::DataError);
-    };
-
-    let archived_header = access::<ArchivedBightHeaderPadded, rancor::Error>(header_bytes)?;
-    let version = archived_header.header.version.to_native();
-
-    match version {
-        BightFileV1::VERSION => {
-            let archived = access::<ArchivedBightFileV1, rancor::Error>(data_bytes)?;
-            let data = deserialize::<BightFileV1, rancor::Error>(archived)?;
-            Ok(data.source)
-        }
-        _ => Err(FileLoadError::UnsupportedVersion(version)),
-    }
+    DeserializationError(#[from] DeserializationError),
 }
 
 #[derive(Debug, thiserror::Error)]
 pub enum FileSaveError {
     #[error(transparent)]
     IoErrror(#[from] std::io::Error),
+    #[error("The filetype {0} is not supported")]
+    UnsupportedFiletype(String),
 }
 
-pub fn save(path: &Path, table: SourceTable) -> Result<(), std::io::Error> {
-    let header = BightHeaderPadded::new(BightFileV1::VERSION);
-    let mut bytes = to_bytes::<rancor::Error>(&header).unwrap();
-
-    let data = BightFileV1 { source: table };
-    bytes.extend_from_slice(&to_bytes::<rancor::Error>(&data).unwrap());
-    std::fs::write(path, bytes)?;
-    Ok(())
+pub fn load(path: &Path) -> Result<BightFile, FileLoadError> {
+    match path
+        .extension()
+        .ok_or(FileLoadError::UnsupportedFiletype(String::from("")))?
+        .to_str()
+        .ok_or(FileLoadError::UnsupportedFiletype(String::from("")))?
+    {
+        "bight" => bight::load(path),
+        ext => Err(FileLoadError::UnsupportedFiletype(ext.to_owned())),
+    }
+}
+pub fn save(path: &Path, file: &BightFile) -> Result<(), FileSaveError> {
+    match path
+        .extension()
+        .ok_or(FileSaveError::UnsupportedFiletype(String::from("")))?
+        .to_str()
+        .ok_or(FileSaveError::UnsupportedFiletype(String::from("")))?
+    {
+        "bight" => Ok(bight::save(path, file)?),
+        ext => Err(FileSaveError::UnsupportedFiletype(ext.to_owned())),
+    }
 }

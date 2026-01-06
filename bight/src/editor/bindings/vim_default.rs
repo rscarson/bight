@@ -7,7 +7,7 @@ use crate::{
     clipboard::{get_clipboard, set_clipboard},
     editor::mode::Mode,
     evaluator::EvaluatorTable,
-    file,
+    file::{self, BightFile},
     key::sequence::parse_key_sequence,
 };
 
@@ -19,7 +19,11 @@ pub fn add_io_bindings(bindings: &mut EditorBindings) {
             "n",
             "s",
             EditorStateCallback::new(|state| {
-                file::save(Path::new("test.bight"), state.table.source_table().clone()).unwrap();
+                file::save(
+                    Path::new("test.bight"),
+                    &BightFile::new(state.table.source_table().clone()),
+                )
+                .unwrap();
             }),
         )
         .unwrap();
@@ -28,7 +32,7 @@ pub fn add_io_bindings(bindings: &mut EditorBindings) {
             "n",
             "S",
             EditorStateCallback::new(|state| {
-                let table = file::load(Path::new("test.bight")).unwrap();
+                let table = file::load(Path::new("test.bight")).unwrap().source;
                 state.table = EvaluatorTable::new(table);
             }),
         )
