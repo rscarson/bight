@@ -1,10 +1,10 @@
 use std::{marker::PhantomData, pin::Pin, sync::Arc};
 
-use mlua::{FromLua, FromLuaMulti, IntoLua, IntoLuaMulti, Lua, Value};
+use mlua::{FromLua, FromLuaMulti, IntoLua, IntoLuaMulti, Lua};
 
 use crate::{
     evaluator::{TableError, TableValue, interaction::CellInfo},
-    table::{cell::CellPos, slice::SlicePos},
+    table::{cell::CellPos, slice::CellRange},
 };
 
 type TableLuaBoxFuture<'a, V> = Pin<Box<dyn Future<Output = mlua::Result<V>> + Send + Sync + 'a>>;
@@ -13,7 +13,7 @@ type TableBoxFn<'a, T, V> = Box<dyn Fn(Lua, T) -> TableLuaBoxFuture<'a, V> + Sen
 fn get<'a>(info: &'a CellInfo<'a>) -> TableBoxFn<'a, CellPos, TableValue> {
     Box::new(move |_lua, pos: CellPos| Box::pin(async move { Ok(info.get(pos).await.into()) }))
 }
-fn pos<'a>(info: &'a CellInfo<'a>) -> TableBoxFn<'a, (), (usize, usize)> {
+fn pos<'a>(info: &'a CellInfo<'a>) -> TableBoxFn<'a, (), (isize, isize)> {
     Box::new(move |_lua, _| {
         Box::pin({
             let pos = info.pos();
@@ -102,71 +102,7 @@ impl IntoLua for TableValue {
     }
 }
 
-fn try_lua_to_usize(value: &mlua::Value) -> Option<usize> {
-    Some(match value {
-        Value::Integer(x) if *x >= 0 => *x as usize,
-        Value::Number(x) if x.is_normal() && !x.is_sign_negative() => x.next_down() as usize,
-        _ => return None,
-    })
-}
-
-impl FromLuaMulti for CellPos {
-    fn from_lua_multi(values: mlua::MultiValue, _lua: &Lua) -> mlua::Result<Self> {
-        const ERROR_MESSAGE: &str = "CellPos can be created from a string in format [A-Za-z]+[0-9]+, 2 non-negative numbers, or a table with x, col, column or 1st element for x coordinate and y, row, or 2nd element for y coordinate";
-        let err = Err(mlua::Error::FromLuaConversionError {
-            from: "",
-            to: "CellPos".into(),
-            message: Some(ERROR_MESSAGE.into()),
-        });
-
-        let pos = match values.len() {
-            0 => return err,
-            1 => {
-                let value = values.into_iter().next().unwrap();
-                match value {
-                    Value::Table(t) => {
-                        let Ok(x) = t
-                            .get("x")
-                            .or_else(|_| t.get("col"))
-                            .or_else(|_| t.get("column"))
-                            .or_else(|_| t.get(1))
-                        else {
-                            log::trace!("could find x value");
-                            return err;
-                        };
-
-                        let Ok(y) = t.get("y").or_else(|_| t.get("row")).or_else(|_| t.get(2))
-                        else {
-                            log::trace!("could find y value");
-                            return err;
-                        };
-                        CellPos::from((x, y))
-                    }
-                    Value::String(s) => {
-                        let Ok(pos) = s.to_str() else { return err };
-                        let Ok(pos) = pos.parse::<CellPos>() else {
-                            return err;
-                        };
-                        pos
-                    }
-                    _ => return err,
-                }
-            }
-            2.. => {
-                let mut iter = values.into_iter();
-                let (x, y) = (iter.next().unwrap(), iter.next().unwrap());
-                let (Some(x), Some(y)) = (try_lua_to_usize(&x), try_lua_to_usize(&y)) else {
-                    return err;
-                };
-                CellPos::from((x, y))
-            }
-        };
-
-        Ok(pos)
-    }
-}
-
-impl FromLua for SlicePos {
+impl FromLua for CellRange {
     fn from_lua(value: mlua::Value, _lua: &Lua) -> mlua::Result<Self> {
         let err = Err(mlua::Error::FromLuaConversionError {
             from: "",

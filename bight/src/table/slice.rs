@@ -8,16 +8,17 @@ use crate::table::cell::CellPosParseError;
 
 use super::cell::CellPos;
 
-pub type IdxRange = Range<usize>;
+pub type IdxRange = Range<isize>;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct SlicePos {
+pub struct CellRange {
     pub start: CellPos,
-    pub end: CellPos,
+    pub width: usize,
+    pub height: usize,
 }
 
-impl SlicePos {
-    pub fn new<A: Into<CellPos>, B: Into<CellPos>>(start: A, end: B) -> Self {
+impl CellRange {
+    pub fn new_limits<A: Into<CellPos>, B: Into<CellPos>>(start: A, end: B) -> Self {
         let mut start: CellPos = start.into();
         let mut end: CellPos = end.into();
 
@@ -28,11 +29,18 @@ impl SlicePos {
             std::mem::swap(&mut start.y, &mut end.y);
         }
 
-        Self { start, end }
+        Self {
+            start,
+            width: (end.x - start.x) as usize,
+            height: (end.y - start.y) as usize,
+        }
     }
     pub fn is_inside(&self, pos: impl Into<CellPos>) -> bool {
         let p: CellPos = pos.into();
-        (p.x >= self.start.x) && (p.y >= self.start.y) && (p.x < self.end.x) && (p.y < self.end.y)
+        (p.x >= self.start.x)
+            && (p.y >= self.start.y)
+            && (p.x < self.start.x + self.width as isize)
+            && (p.y < self.start.y + self.height as isize)
     }
 
     pub fn is_valid_shift(&self, shift: CellPos) -> bool {
@@ -46,17 +54,17 @@ impl SlicePos {
     }
 
     pub fn columns(&self) -> IdxRange {
-        0..(self.end.x - self.start.x)
+        0..(self.width as isize)
     }
 
     pub fn rows(&self) -> IdxRange {
-        0..(self.end.y - self.start.y)
+        0..(self.height as isize)
     }
 }
 
-impl<A: Into<CellPos>, B: Into<CellPos>> From<(A, B)> for SlicePos {
+impl<A: Into<CellPos>, B: Into<CellPos>> From<(A, B)> for CellRange {
     fn from(value: (A, B)) -> Self {
-        Self::new(value.0, value.1)
+        Self::new_limits(value.0, value.1)
     }
 }
 
@@ -69,7 +77,7 @@ impl From<CellPosParseError> for SlicePosParseError {
     }
 }
 
-impl FromStr for SlicePos {
+impl FromStr for CellRange {
     type Err = SlicePosParseError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut cells = s.split('_');

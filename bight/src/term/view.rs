@@ -76,7 +76,7 @@ pub mod table {
     ) {
         let pos: CellPos = pos.into();
         set_cursor(buf, rect, pos);
-        if let Some(Some(cont)) = slice.get(pos) {
+        if let Some(cont) = slice.get(pos) {
             queue!(buf, Print(&format!("{cont}",))).unwrap();
         }
     }

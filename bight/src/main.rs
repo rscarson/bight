@@ -69,7 +69,7 @@ fn main() {
 
 fn draw(editor: &EditorState, sequence: &[Key]) {
     let mut stdout = stdout();
-    let data = TableSlice::new(((0, 0), (50, 50)), &editor.table);
+    let data = TableSlice::slice_table(((0, 0), (50, 50)), &editor.table);
     let rect = DrawRect::full_term();
     editor::draw(&mut stdout, rect, editor, sequence, data);
     stdout.flush().unwrap();

@@ -6,14 +6,11 @@ pub fn write_slice_to_csv(
     slice: TableSlice<'_, impl Table<Item: Display>>,
     writer: &mut csv::Writer<impl Write>,
 ) -> Result<(), csv::Error> {
-    for x in slice.col_indexes() {
-        writer.write_record(slice.row_indexes().map(|y| {
-            slice
-                .get((x, y))
-                .expect("The position is inside the slice")
-                .map(|v| v.to_string())
-                .unwrap_or_default()
-        }))?;
+    for x in slice.cols() {
+        writer.write_record(
+            x.into_iter()
+                .map(|v| v.map(|v| v.to_string()).unwrap_or_default()),
+        )?;
     }
     Ok(())
 }
