@@ -19,6 +19,9 @@ pub trait Table {
     fn ref_sh(&self, pos: CellPos) -> TableRef<'_, Self> {
         TableRef::new(self, pos)
     }
+    fn slice(&self, range: CellRange) -> TableSlice<'_, Self> {
+        TableSlice::new(self.ref_sh(range.start), range.width, range.height)
+    }
 }
 
 pub trait TableMut: Table {

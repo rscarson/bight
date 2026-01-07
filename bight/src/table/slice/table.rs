@@ -19,31 +19,26 @@ use super::{CellRange, IdxRange};
 /// The slice is non-inclusive (the end cell, its row and col are not included)
 /// Both end's coordinates are greater or equal to the corresponding start's coordinates (end must
 /// be to the down-right of the start)
-pub struct TableSlice<'a, T> {
+pub struct TableSlice<'a, T: ?Sized> {
     r: TableRef<'a, T>,
     width: usize,
     height: usize,
 }
 
-impl<T> Clone for TableSlice<'_, T> {
+impl<T: ?Sized> Clone for TableSlice<'_, T> {
     fn clone(&self) -> Self {
         *self
     }
 }
-impl<T> Copy for TableSlice<'_, T> {}
+impl<T: ?Sized> Copy for TableSlice<'_, T> {}
 
-impl<'a, T: Table> TableSlice<'a, T> {
+impl<'a, T: Table + ?Sized> TableSlice<'a, T> {
     pub fn new(r: TableRef<'a, T>, width: usize, height: usize) -> Self {
         Self { r, width, height }
     }
     pub fn slice_table(pos: impl Into<CellRange>, table: &'a T) -> Self {
         let pos = pos.into();
-        let r = table.ref_sh(pos.start);
-        Self {
-            r,
-            width: pos.width,
-            height: pos.height,
-        }
+        table.slice(pos)
     }
 
     pub fn get(&self, pos: impl Into<CellPos>) -> Option<&'a T::Item> {
@@ -140,7 +135,7 @@ impl<'a, T: Table> TableSlice<'a, T> {
     }
 }
 
-impl<'a, T: Table> Debug for TableSlice<'a, T> {
+impl<'a, T: Table + ?Sized> Debug for TableSlice<'a, T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let end_pos = CellPos {
             x: self.r.pos().x + self.width as isize,

@@ -7,7 +7,7 @@ use crate::table::Table;
 /// positions are the same)
 ///
 /// Can be created from a TableSlice using TryFrom
-pub struct RowSlice<'a, T: Table> {
+pub struct RowSlice<'a, T: Table + ?Sized> {
     inner: TableSlice<'a, T>,
 }
 
@@ -17,11 +17,17 @@ impl<'a, T: Table> RowSlice<'a, T> {
     }
 }
 
+impl<'a, T: Table + ?Sized> AsRef<TableSlice<'a, T>> for RowSlice<'a, T> {
+    fn as_ref(&self) -> &TableSlice<'a, T> {
+        &self.inner
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 #[error("Given SlicePos is not a single row")]
 pub struct RowSliceError;
 
-impl<'a, T: Table> TryFrom<TableSlice<'a, T>> for RowSlice<'a, T> {
+impl<'a, T: Table + ?Sized> TryFrom<TableSlice<'a, T>> for RowSlice<'a, T> {
     type Error = RowSliceError;
     fn try_from(value: TableSlice<'a, T>) -> Result<Self, Self::Error> {
         if value.is_row() {

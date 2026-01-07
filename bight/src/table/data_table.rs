@@ -21,7 +21,7 @@ impl<I> DataTable<I> {
         Self::default()
     }
 
-    /// Makes a  table slice that is guaranteed to contain every set element of this table (but
+    /// Makes a table slice that is guaranteed to contain every set element of this table (but
     /// doesn't guarantee that every element of slice is set)
     pub fn full_slice(&self) -> TableSlice<'_, Self> {
         let rows = self.data.len();

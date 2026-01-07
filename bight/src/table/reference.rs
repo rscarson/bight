@@ -5,7 +5,7 @@ pub struct TableRef<'a, T: ?Sized> {
     pos: CellPos,
 }
 
-impl<T> Clone for TableRef<'_, T> {
+impl<T: ?Sized> Clone for TableRef<'_, T> {
     fn clone(&self) -> Self {
         *self
         // Self {
@@ -15,7 +15,7 @@ impl<T> Clone for TableRef<'_, T> {
     }
 }
 
-impl<T> Copy for TableRef<'_, T> {}
+impl<T: ?Sized> Copy for TableRef<'_, T> {}
 
 impl<'a, T: Table + ?Sized> TableRef<'a, T> {
     pub fn new(table: &'a T, pos: CellPos) -> Self {
