@@ -11,6 +11,13 @@ pub struct RowSlice<'a, T: Table + ?Sized> {
     inner: TableSlice<'a, T>,
 }
 
+impl<T: Table + ?Sized> Copy for RowSlice<'_, T> {}
+impl<T: Table + ?Sized> Clone for RowSlice<'_, T> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
 impl<'a, T: Table> RowSlice<'a, T> {
     pub fn into_inner(self) -> TableSlice<'a, T> {
         self.inner
@@ -38,7 +45,7 @@ impl<'a, T: Table + ?Sized> TryFrom<TableSlice<'a, T>> for RowSlice<'a, T> {
     }
 }
 
-impl<'a, T: Table> IntoIterator for RowSlice<'a, T> {
+impl<'a, T: Table + ?Sized> IntoIterator for RowSlice<'a, T> {
     type Item = <TableSlice<'a, T> as IntoIterator>::Item;
     type IntoIter = <TableSlice<'a, T> as IntoIterator>::IntoIter;
     fn into_iter(self) -> Self::IntoIter {
@@ -46,7 +53,7 @@ impl<'a, T: Table> IntoIterator for RowSlice<'a, T> {
     }
 }
 
-impl<'a, T: Table> Debug for RowSlice<'a, T> {
+impl<'a, T: Table + ?Sized> Debug for RowSlice<'a, T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "RowSlice with {:?}", self.inner)
     }

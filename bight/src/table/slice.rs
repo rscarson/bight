@@ -2,7 +2,10 @@ pub mod col;
 pub mod row;
 pub mod table;
 
-use std::{ops::Range, str::FromStr};
+use std::{
+    ops::{Range, RangeInclusive},
+    str::FromStr,
+};
 
 use crate::table::cell::CellPosParseError;
 
@@ -27,6 +30,23 @@ impl CellRange {
         }
         if start.y > end.y {
             std::mem::swap(&mut start.y, &mut end.y);
+        }
+
+        Self {
+            start,
+            width: (end.x - start.x) as usize,
+            height: (end.y - start.y) as usize,
+        }
+    }
+    pub fn new_limits_ordered<A: Into<CellPos>, B: Into<CellPos>>(start: A, end: B) -> Self {
+        let start: CellPos = start.into();
+        let mut end: CellPos = end.into();
+
+        if start.x > end.x {
+            end.x = start.x;
+        }
+        if start.y > end.y {
+            end.y = start.y;
         }
 
         Self {
@@ -65,6 +85,32 @@ impl CellRange {
 impl<A: Into<CellPos>, B: Into<CellPos>> From<(A, B)> for CellRange {
     fn from(value: (A, B)) -> Self {
         Self::new_limits(value.0, value.1)
+    }
+}
+
+impl<T> From<Range<T>> for CellRange
+where
+    T: Into<CellPos>,
+{
+    fn from(value: Range<T>) -> Self {
+        let Range { start, end } = value;
+        let start = start.into();
+        let end = end.into();
+        Self::new_limits_ordered(start, end)
+    }
+}
+
+impl<T> From<RangeInclusive<T>> for CellRange
+where
+    T: Into<CellPos>,
+{
+    fn from(value: RangeInclusive<T>) -> Self {
+        let (start, end) = value.into_inner();
+        let start = start.into();
+        let mut end = end.into();
+        end.x += 1;
+        end.y += 1;
+        Self::new_limits_ordered(start, end)
     }
 }
 

@@ -10,7 +10,7 @@ end
 
 function REL(deltaX, deltaY)
   x, y = POS()
-  GET(x + deltaX, y + deltaY)
+  return GET(x + deltaX, y + deltaY)
 end
 
 setmetatable(_G, {
