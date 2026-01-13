@@ -106,3 +106,14 @@ pub fn set_clipboard(v: Arc<str>) {
     }
     guard.as_mut().unwrap().set(v)
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    #[test]
+    fn it_works() {
+        let text: &'static str = "Some text";
+        set_clipboard(Arc::from(text));
+        assert_eq!(get_clipboard().unwrap().as_ref(), text);
+    }
+}
