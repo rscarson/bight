@@ -5,8 +5,7 @@ use std::{
     process::{Command, Stdio},
 };
 
-use bight_lsp::{io_connection, transform_client_to_server, transform_server_to_client};
-use crossbeam::channel::{RecvError, TryRecvError};
+use bight_lsp::io_connection;
 use lsp_server::Connection;
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -17,12 +16,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         .spawn()?;
     let (server_in, server_out) = (child.stdout.take().unwrap(), child.stdin.take().unwrap());
     let buf_in = BufReader::new(server_in);
-    let (server_connection, _server_threads) = io_connection(buf_in, server_out);
+    let (_server_connection, _server_threads) = io_connection(buf_in, server_out);
     let (client_connection, _client_threads) = Connection::stdio();
     let (id, params) = client_connection.initialize_start()?;
 
     let init_params: InitializeParams = serde_json::from_value(params).unwrap();
-    let client_capabilities: ClientCapabilities = init_params.capabilities;
+    let _client_capabilities: ClientCapabilities = init_params.capabilities;
     let server_capabilities = ServerCapabilities::default();
 
     let initialize_data = serde_json::json!({
@@ -34,16 +33,16 @@ fn main() -> Result<(), Box<dyn Error>> {
     });
 
     client_connection.initialize_finish(id, initialize_data)?;
-    'main_loop: loop {
-        loop {
-            let msg_res = client_connection.receiver.recv();
-            let msg = match msg_res {
-                Ok(msg) => transform_client_to_server(msg),
-                Err(RecvError) => break 'main_loop,
-            };
-            server_connection.sender.send(msg).unwrap();
-        }
-    }
+    // 'main_loop: loop {
+    //     loop {
+    //         let msg_res = client_connection.receiver.recv();
+    //         let msg = match msg_res {
+    //             Ok(msg) => transform_client_to_server(msg),
+    //             Err(RecvError) => break 'main_loop,
+    //         };
+    //         server_connection.sender.send(msg).unwrap();
+    //     }
+    // }
 
     Ok(())
 }
