@@ -39,7 +39,7 @@ impl BightHeaderPadded {
     }
 }
 
-/// Converts the bytes into the latest version of bight file. Returns new empty file if bytes is empty
+/// Converts the bytes into the latest version of bight file. Returns new empty file if `bytes` is empty
 pub fn from_bytes(bytes: &[u8]) -> Result<BightFile, DeserializationError> {
     if bytes.is_empty() {
         return Ok(BightFile::empty());
@@ -58,11 +58,13 @@ pub fn from_bytes(bytes: &[u8]) -> Result<BightFile, DeserializationError> {
     }
 }
 
+/// Load a bight file
 pub fn load(path: &Path) -> Result<BightFile, FileLoadError> {
     let bytes = std::fs::read(path)?;
     Ok(from_bytes(&bytes)?)
 }
 
+/// Converst a bight file into bytes for storage
 pub fn to_bytes(file: &BightFile) -> rkyv::util::AlignedVec {
     let header = BightHeaderPadded::builder()
         .version(BightFile::VERSION)
@@ -73,6 +75,7 @@ pub fn to_bytes(file: &BightFile) -> rkyv::util::AlignedVec {
     bytes
 }
 
+/// Saves a bight file
 pub fn save(path: &Path, file: &BightFile) -> Result<(), std::io::Error> {
     let bytes = to_bytes(file);
     std::fs::write(path, bytes)?;

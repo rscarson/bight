@@ -1,11 +1,14 @@
 pub mod bight;
 pub mod csv;
-pub use bight::load as load_bight;
-pub use csv::slice_to_csv_string;
-use std::path::Path;
 
 pub use bight::BightFile;
+pub use bight::{load as load_bight, save as save_bight};
+pub use csv::load as load_csv;
+pub use csv::slice_to_csv_string;
 
+use std::path::Path;
+
+/// The error type for conversion from bytes to a bight file
 #[derive(Debug, thiserror::Error)]
 pub enum DeserializationError {
     #[error("The length of the data is less that the minimum requirement for the header")]
@@ -17,6 +20,8 @@ pub enum DeserializationError {
     #[error("Bight file version {0} is not supported")]
     UnsupportedVersion(u64),
 }
+
+/// The error type for loading a file
 #[derive(Debug, thiserror::Error)]
 pub enum FileLoadError {
     #[error(transparent)]
@@ -27,6 +32,7 @@ pub enum FileLoadError {
     DeserializationError(#[from] DeserializationError),
 }
 
+/// The error type for saving a file
 #[derive(Debug, thiserror::Error)]
 pub enum FileSaveError {
     #[error(transparent)]
@@ -35,6 +41,10 @@ pub enum FileSaveError {
     UnsupportedFiletype(String),
 }
 
+/// Loads a file, guessing the filetype based on the file extension. For specialized functions for
+/// loading a file of a known type see `load` functions in submodules, or their reexports
+/// [`load_bight`], [`load_csv`], etc. Return an error if the extension is not supported or the
+/// file is invalid
 pub fn load(path: &Path) -> Result<BightFile, FileLoadError> {
     match path
         .extension()
@@ -47,6 +57,11 @@ pub fn load(path: &Path) -> Result<BightFile, FileLoadError> {
         ext => Err(FileLoadError::UnsupportedFiletype(ext.to_owned())),
     }
 }
+
+/// Saves a file, guessing the filetype based on the file extension. For specialized functions for
+/// saving a file of a known type see `save` functions in submodules, or their reexports
+/// [`save_bight`], etc. Return an error if the extension is not supported or the
+/// file couldn't be saved
 pub fn save(path: &Path, file: &BightFile) -> Result<(), FileSaveError> {
     match path
         .extension()

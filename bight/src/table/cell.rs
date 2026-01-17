@@ -1,3 +1,30 @@
+//! The module for working with positions in a table. The main type representing some position is
+//! [`CellPos`]. It has 2 integer coordinates: x and
+//! y (alternatively column and row). It's used to get and set values of the tables.
+//!
+//! It's represented by a string in the following format:
+//! - First, there's the x coordinate. It's represented like a base-26 number with [A-Z] as the
+//!   digits, A being the 0. For example, 0 -> A, 1 -> B, 25 -> Z, 26 -> BA, etc.
+//! - After the x coordinate without any separator there's the y coordinate written as a decimal.
+//!
+//! Examples: (0, 0) -> A0, (1, 1) -> B1, (28, 130) -> BC130. Conversions are done using Display
+//! and FromStr traits.
+//!
+//! ```
+//! # use bight::table::CellPos;
+//! # use std::str::FromStr;
+//! # fn main() {
+//!     let cell_pos = CellPos::from_str("BC130").unwrap();
+//!     assert_eq!(cell_pos, CellPos::from((28, 130)));
+//!     let string = format!("{cell_pos}");
+//!     assert_eq!(string, "BC130");
+//!     assert!(CellPos::from_str("invalid string").is_err());
+//! # }
+//!
+//! ```
+//!
+//! It can be converted from Lua from a string, 2 non-negative numbers, or a table with x, col, column or 1st element for x coordinate and y, row, or 2nd element for y coordinate
+
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::str::FromStr;
@@ -5,6 +32,7 @@ use std::str::FromStr;
 use rkyv::{Archive, Deserialize, Serialize};
 #[derive(Clone, Copy, Hash, PartialEq, Eq, Default, Archive, Serialize, Deserialize)]
 #[rkyv(derive(PartialEq, Eq, Hash))]
+/// A type representing some position in a table. See module level docs for more info.
 pub struct CellPos {
     pub x: isize,
     pub y: isize,
@@ -25,6 +53,7 @@ impl From<(isize, isize)> for CellPos {
     }
 }
 
+/// Error of converting a &str into a CellPos
 #[derive(Debug, thiserror::Error)]
 pub enum CellPosParseError {
     #[error("CellPos str contained an invalid digit")]
