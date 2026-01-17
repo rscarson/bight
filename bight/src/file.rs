@@ -12,8 +12,8 @@ pub enum DeserializationError {
     InvalidLength,
     #[error(transparent)]
     ArchiveError(#[from] rkyv::rancor::Error),
-    #[error("Data contains invalid UTF-8")]
-    StringError,
+    #[error("Data contains invalid csv")]
+    CsvError,
     #[error("Bight file version {0} is not supported")]
     UnsupportedVersion(u64),
 }
@@ -43,6 +43,7 @@ pub fn load(path: &Path) -> Result<BightFile, FileLoadError> {
         .ok_or(FileLoadError::UnsupportedFiletype(String::from("")))?
     {
         "bight" => bight::load(path),
+        "csv" => csv::load(path),
         ext => Err(FileLoadError::UnsupportedFiletype(ext.to_owned())),
     }
 }

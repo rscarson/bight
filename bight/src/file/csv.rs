@@ -1,6 +1,10 @@
-use std::{fmt::Display, io::Write};
+use std::{fmt::Display, io::Write, path::Path, sync::Arc};
 
-use crate::table::{Table, slice::table::TableSlice};
+use crate::{
+    evaluator::SourceTable,
+    file::{BightFile, DeserializationError, FileLoadError},
+    table::{CellPos, Table, slice::table::TableSlice},
+};
 
 pub fn write_slice_to_csv(
     slice: TableSlice<'_, impl Table<Item: Display>>,
@@ -17,13 +21,63 @@ pub fn write_slice_to_csv(
 
 pub fn slice_to_csv_string(slice: TableSlice<'_, impl Table<Item: Display>>) -> String {
     let mut s = Vec::<u8>::new();
-    let mut v = csv::WriterBuilder::new().from_writer(&mut s);
+    let mut v = csv::WriterBuilder::new()
+        .has_headers(false)
+        .from_writer(&mut s);
 
     write_slice_to_csv(slice, &mut v).expect("The writer configuration was valid");
     v.flush().expect("The writer configuration is valid");
     drop(v);
 
     String::from_utf8(s).expect("No non-utf8 data was written")
+}
+
+pub struct CsvFile {
+    pub source: SourceTable,
+}
+
+impl CsvFile {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, DeserializationError> {
+        let reader = csv::ReaderBuilder::new()
+            .has_headers(false)
+            .from_reader(bytes);
+
+        let source = reader
+            .into_records()
+            .enumerate()
+            .map(|(posy, record)| {
+                Ok(record?
+                    .into_iter()
+                    .enumerate()
+                    .map(move |(posx, value)| {
+                        let pos = CellPos::from((posx as isize, posy as isize));
+                        (pos, Arc::from(value))
+                    })
+                    .collect::<Vec<_>>())
+            })
+            .collect::<Result<Vec<_>, csv::Error>>()
+            .map_err(|_| DeserializationError::CsvError)?
+            .into_iter()
+            .flatten()
+            .collect();
+        Ok(Self { source })
+    }
+}
+
+impl From<CsvFile> for BightFile {
+    fn from(val: CsvFile) -> Self {
+        BightFile { source: val.source }
+    }
+}
+
+// pub fn save(path: &Path, file: &BightFile) -> Result<(), FileSaveError> {
+//     let end = CellPos::from((0, 0));
+//
+// }
+
+pub fn load(path: &Path) -> Result<BightFile, FileLoadError> {
+    let bytes = std::fs::read(path)?;
+    Ok(CsvFile::from_bytes(&bytes)?.into())
 }
 
 #[cfg(test)]
