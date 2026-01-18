@@ -1,9 +1,25 @@
+//! The module that provides abstractions over keypresses and their results. The module operates on
+//! the Key type, which represents a key press with the modifiers, and sequences of Keys `[`Key`]`.
+//!
+//! The [`MatchSequence`] trait handles the given key sequence, returning some value or giving an error
+//! on mismatch. The types implementing this trait are use by bight's standalone editor to handle
+//! input and match the corresponding callbacks.
+//!
+//! [`SequenceBinding`] is a simple [`MatchSequence`] implementor that returns its stored value
+//! when the given key sequence exactly matches its stored sequence.
+
 pub mod sequence;
+
+pub use sequence::{MatchSequence, SequenceBinding};
+
 use std::fmt::Display;
 
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone)]
+/// [`Key`] represents any keypress event. Simple vim-style notation is supported to convert to and
+/// from strings. (Only single chars may be converted into [`Key`]. Some modifiers are supported
+/// when converting a [`Key`] into a string.)
 pub struct Key {
     event: KeyEvent,
 }
@@ -74,6 +90,8 @@ impl From<KeyEvent> for Key {
 
 #[derive(Debug, thiserror::Error)]
 #[error("Given event is not a key event")]
+/// Error that is returned when trying to convert from a crossterm event that is not a keypress
+/// into a [`Key`]
 pub struct EventToKeyConversionError;
 
 impl TryFrom<Event> for Key {
@@ -86,23 +104,8 @@ impl TryFrom<Event> for Key {
         }
     }
 }
-pub enum KeyString {
+
+enum KeyString {
     Plain(String),
     Escape(String),
-}
-
-impl KeyString {
-    pub fn into_inner(self) -> String {
-        match self {
-            Self::Plain(s) => s,
-            Self::Escape(s) => s,
-        }
-    }
-
-    pub fn inner_str(&self) -> &str {
-        match self {
-            Self::Plain(s) => s,
-            Self::Escape(s) => s,
-        }
-    }
 }

@@ -10,7 +10,7 @@
 //! in the nvim plugin documentation).
 //!
 //! The tables may be saved and loaded from files, evaluated
-//! cells may be exported as csv. Bight also provides some simple terminal (including keybindings) and clipboard
+//! cells may be exported as csv (see the [`mod@file`] module). Bight also provides some simple terminal (including keybindings) and clipboard
 //! abstrations.
 
 pub mod app;

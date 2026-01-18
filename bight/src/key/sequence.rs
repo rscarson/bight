@@ -50,6 +50,8 @@ impl<T: Clone> MatchSequence for SequenceBinding<T> {
     }
 }
 
+/// Formats key sequence in an vim-like notation.
+/// TODO: format escaped keys
 pub fn format_sequence(sequence: &[Key]) -> String {
     sequence
         .iter()
@@ -59,6 +61,8 @@ pub fn format_sequence(sequence: &[Key]) -> String {
 #[derive(Debug, thiserror::Error)]
 pub enum SequenceParseError {}
 
+/// Parses a key sequence in an vim-like notation.
+/// TODO: parse escaped keys
 pub fn parse_key_sequence(sequence: &str) -> Result<Vec<Key>, SequenceParseError> {
     let mut result = Vec::new();
 

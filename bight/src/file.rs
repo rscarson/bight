@@ -1,3 +1,8 @@
+//! The module with funtions and data types for saving and loading files, as well as other means of
+//! importing and exporting bight tables. Files may be saved/loaded based on their extension with
+//! [`save`] and [`load`], or as a known filetype with the corresponding functions in the
+//! submodules. Some filetypes may also be imported and exported as bytes or as a string.
+
 pub mod bight;
 pub mod csv;
 
