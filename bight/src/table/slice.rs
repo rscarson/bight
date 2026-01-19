@@ -2,6 +2,8 @@ pub mod col;
 pub mod row;
 pub mod table;
 
+mod lua;
+
 use std::{
     ops::{Range, RangeInclusive},
     str::FromStr,

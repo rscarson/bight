@@ -4,7 +4,7 @@ use mlua::{FromLua, FromLuaMulti, IntoLua, IntoLuaMulti, Lua};
 
 use crate::{
     evaluator::{TableError, TableValue, interaction::CellInfo},
-    table::{cell::CellPos, slice::CellRange},
+    table::cell::CellPos,
 };
 
 type TableLuaBoxFuture<'a, V> = Pin<Box<dyn Future<Output = mlua::Result<V>> + Send + Sync + 'a>>;
@@ -13,13 +13,9 @@ type TableBoxFn<'a, T, V> = Box<dyn Fn(Lua, T) -> TableLuaBoxFuture<'a, V> + Sen
 fn get<'a>(info: &'a CellInfo<'a>) -> TableBoxFn<'a, CellPos, TableValue> {
     Box::new(move |_lua, pos: CellPos| Box::pin(async move { Ok(info.get(pos).await.into()) }))
 }
-fn pos<'a>(info: &'a CellInfo<'a>) -> TableBoxFn<'a, (), (isize, isize)> {
-    Box::new(move |_lua, _| {
-        Box::pin({
-            let pos = info.pos();
-            async move { Ok((pos.x, pos.y)) }
-        })
-    })
+
+fn pos<'a>(info: &'a CellInfo<'a>) -> TableBoxFn<'a, (), CellPos> {
+    Box::new(move |_lua, _| Box::pin(async move { Ok(info.pos()) }))
 }
 
 unsafe fn trust_me_bro(info: &CellInfo) -> &'static CellInfo<'static> {
@@ -66,9 +62,14 @@ pub async fn evaluate<'a>(source: &str, info: &'a CellInfo<'a>) -> TableValue {
     lua.load(include_str!("../prelude.lua"))
         .exec()
         .expect("Prelude is valid and known at compile time");
+
+    let convert_pos = lua.create_function(|_, val: CellPos| Ok(val)).unwrap();
+
+    lua.globals().set("CELL_POS", convert_pos).unwrap();
+
     let mut ev = CellEvaluator::new(info, lua);
 
-    ev.add_global_fn("POS", pos);
+    ev.add_global_fn("THIS_POS", pos);
     ev.add_global_fn("GET", get);
 
     let res = ev.evaluate(source).await;
@@ -99,25 +100,5 @@ impl IntoLua for TableValue {
             Self::Number(value) => Ok(value.into_lua(lua).expect("Failed to conver f64 to lua")),
             Self::Err(e) => e.to_string().into_lua(lua),
         }
-    }
-}
-
-impl FromLua for CellRange {
-    fn from_lua(value: mlua::Value, _lua: &Lua) -> mlua::Result<Self> {
-        let err = Err(mlua::Error::FromLuaConversionError {
-            from: "",
-            to: "SlicePos".into(),
-            message: Some(
-                "CellPos can be created from a string in format {CellPos}_{CellPos}".into(),
-            ),
-        });
-
-        let mlua::Value::String(pos) = value else {
-            return err;
-        };
-        let Ok(pos) = pos.to_str() else { return err };
-        let Ok(pos) = pos.parse() else { return err };
-
-        Ok(pos)
     }
 }

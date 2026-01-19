@@ -1,16 +1,5 @@
-function POSX()
-  x, _ = POS()
-  return x
-end
-
-function POSY()
-  _, y = POS()
-  return y
-end
-
 function REL(deltaX, deltaY)
-  x, y = POS()
-  return GET(x + deltaX, y + deltaY)
+  return GET(POS.x + deltaX, POS.y + deltaY)
 end
 
 function RELX(deltaX)
@@ -23,6 +12,7 @@ end
 
 setmetatable(_G, {
   __index = function(_, index)
-    return GET(index)
+    if (index == "POS") then return THIS_POS() end
+    return CELL_POS(index)
   end
 })
