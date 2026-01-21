@@ -10,7 +10,7 @@ pub fn write_slice_to_csv(
     slice: TableSlice<'_, impl Table<Item: Display>>,
     writer: &mut csv::Writer<impl Write>,
 ) -> Result<(), csv::Error> {
-    for x in slice.cols() {
+    for x in slice.rows() {
         writer.write_record(
             x.into_iter()
                 .map(|v| v.map(|v| v.to_string()).unwrap_or_default()),
@@ -81,11 +81,12 @@ mod test {
     fn csv() {
         let mut table = DataTable::new();
         table.set((0, 0).into(), Some("Hello, "));
-        table.set((1, 1).into(), Some("World!"));
+        table.set((0, 1).into(), Some("World"));
+        table.set((1, 1).into(), Some("!"));
 
         let csv = slice_to_csv_string(table.full_slice());
 
-        assert_eq!(csv, "\"Hello, \",\n,World!\n");
+        assert_eq!(csv, "\"Hello, \",\nWorld,!\n");
     }
 
     #[test]
