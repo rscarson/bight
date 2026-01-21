@@ -51,6 +51,9 @@ impl mlua::FromLuaMulti for CellPos {
                         };
                         pos
                     }
+                    mlua::Value::UserData(ud) => {
+                        return ud.take::<Self>();
+                    }
                     _ => return err,
                 }
             }
@@ -79,6 +82,17 @@ impl mlua::UserData for CellPos {
             let pos =
                 CellPos::from_lua_multi(mlua::MultiValue::from_vec(vec![val.into_lua(lua)?]), lua)?;
             Ok(CellRange::new_limits(this, pos))
+        });
+
+        methods.add_meta_method("__sub", |_lua, &(mut this), val: CellPos| {
+            this.x -= val.x;
+            this.y -= val.y;
+            Ok(this)
+        });
+        methods.add_meta_method("__add", |_lua, &(mut this), val: CellPos| {
+            this.x += val.x;
+            this.y += val.y;
+            Ok(this)
         });
     }
 
