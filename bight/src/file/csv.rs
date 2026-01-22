@@ -73,30 +73,24 @@ pub fn load(path: &Path) -> Result<BightFile, FileLoadError> {
 
 #[cfg(test)]
 mod test {
-    use crate::table::{DataTable, TableMut};
-
     use super::*;
+    use crate::test_util::*;
 
     #[test]
     fn csv() {
-        let mut table = DataTable::new();
-        table.set((0, 0).into(), Some("Hello, "));
-        table.set((0, 1).into(), Some("World"));
-        table.set((1, 1).into(), Some("!"));
+        let table = small_latin_str_data_table();
 
         let csv = slice_to_csv_string(table.full_slice());
 
-        assert_eq!(csv, "\"Hello, \",\nWorld,!\n");
+        assert_eq!(csv, "Hello ,\n\"again, \",World!\n");
     }
 
     #[test]
     fn cyrillic() {
-        let mut table = DataTable::new();
-        table.set((0, 0).into(), Some("Привет, "));
-        table.set((1, 1).into(), Some("мир!"));
+        let table = small_cyrillic_str_data_table();
 
         let csv = slice_to_csv_string(table.full_slice());
 
-        assert_eq!(csv, "\"Привет, \",\n,мир!\n");
+        assert_eq!(csv, "Привет ,\n\"снова, \",мир!\n");
     }
 }

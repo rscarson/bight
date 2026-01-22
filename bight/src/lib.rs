@@ -20,5 +20,9 @@ pub mod editor;
 pub mod evaluator;
 pub mod file;
 pub mod key;
+pub mod plot;
 pub mod table;
 pub mod term;
+
+#[cfg(test)]
+pub mod test_util;

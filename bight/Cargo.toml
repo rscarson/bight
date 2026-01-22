@@ -23,3 +23,7 @@ hashbrown = "0.15.5"
 rkyv = { version = "0.8.12", features = ["bytecheck", "hashbrown-0_15"] }
 csv = "1.4.0"
 bon = "3.8.1"
+plotters = "0.3.7"
+
+[dev-dependencies]
+tempfile = "3.24.0"
