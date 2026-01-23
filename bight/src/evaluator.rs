@@ -57,9 +57,6 @@ impl TableValue {
             .take(length)
             .collect()
     }
-}
-
-impl TableValue {
     pub fn from_stringable(s: impl ToString) -> Self {
         Self::Text(s.to_string().into())
     }
@@ -75,6 +72,20 @@ impl Display for TableValue {
             Self::Number(value) => write!(f, "{value}"),
             Self::Err(e) => write!(f, "#ERR: {e}"),
             Self::Empty => write!(f, ""),
+        }
+    }
+}
+#[derive(Debug, thiserror::Error)]
+#[error("The TableValue couldn't be converted")]
+pub struct TableValueConversionError;
+impl TryFrom<TableValue> for f64 {
+    type Error = TableValueConversionError;
+    fn try_from(value: TableValue) -> Result<Self, Self::Error> {
+        use TableValue::{Empty, Number};
+        match value {
+            Empty => Ok(0.0),
+            Number(v) => Ok(v),
+            _ => Err(TableValueConversionError),
         }
     }
 }

@@ -111,7 +111,7 @@ checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
 
 [[package]]
 name = "bight"
-version = "0.1.1-f"
+version = "0.1.2-b"
 dependencies = [
  "arboard",
  "bon",
