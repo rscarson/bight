@@ -23,7 +23,7 @@ pub fn normal_float_data_table() -> DataTable<f64> {
     let mut table = DataTable::new();
     table.set((0, 0).into(), Some(-1.0));
     table.set((1, 0).into(), Some(0.0));
-    table.set((2, 0).into(), Some(1.0));
+    table.set((2, 0).into(), Some(2.0));
 
     table.set((0, 1).into(), Some(0.0));
     table.set((1, 1).into(), Some(0.0));
