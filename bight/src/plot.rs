@@ -6,7 +6,7 @@ use std::{error::Error, ops::Range, path::Path};
 use crate::table::{Table, TableSlice};
 
 use plotters::{coord::types::RangedCoordf64, prelude::*, style::full_palette::PURPLE};
-use polyfit::MonomialFit;
+use polyfit::{ChebyshevFit, MonomialFit, score, statistics::DegreeBound};
 
 #[derive(Debug, thiserror::Error)]
 pub enum PlotError<DE: Error + Send + Sync> {
@@ -16,6 +16,8 @@ pub enum PlotError<DE: Error + Send + Sync> {
     SliceSizeError,
     #[error(transparent)]
     DrawingError(#[from] DrawingAreaErrorKind<DE>),
+    #[error(transparent)]
+    FitError(#[from] polyfit::error::Error),
 }
 
 const PLOT_COLORS: [RGBColor; 5] = [BLUE, RED, BLACK, GREEN, PURPLE];
@@ -43,13 +45,22 @@ where
     let mut chart = prepare_chart(chart, &data)?;
 
     for (column, color) in data.y.into_iter().zip(PLOT_COLORS.iter().cycle()) {
-        chart.draw_series(LineSeries::new(
-            column
+        let xy_data = data
+            .x
+            .iter()
+            .copied()
+            .zip(column.into_iter())
+            .collect::<Vec<_>>();
+
+        chart.draw_series(LineSeries::new(xy_data.iter().copied(), color))?;
+
+        let style: ShapeStyle = <&RGBColor as Into<ShapeStyle>>::into(color).filled();
+
+        chart.draw_series(
+            xy_data
                 .into_iter()
-                .zip(data.x.iter().copied())
-                .map(|(y, x)| (x, y)),
-            color,
-        ))?;
+                .map(|(x, y)| Circle::new((x, y), 3.0, style)),
+        )?;
     }
 
     Ok(())
@@ -71,6 +82,92 @@ where
     let chart = ChartBuilder::on(&root);
 
     plot_segments(data, chart)?;
+
+    // To avoid the IO failure being ignored silently, we manually call the present function
+    root.present()?;
+    log::info!("Plot of {data:?} has been saved to {path:?}");
+
+    Ok(())
+}
+
+/// Plots the data from the slice, approiximating each data series with a curve
+///
+/// Requires a TableSlice to be at least of width 2 and height 1. Interprets the first column as x
+/// values, and the rest as y values. Plots y(x) for each column of y values on the same plot. The
+/// data is converted to floats with the [`TryFrom<T>`] trait. The errors of conversion are
+/// ignored, and 0.0 is used for value conversion of which has failed.
+pub fn plot_auto<T, DB, DE>(
+    data: TableSlice<'_, impl Table<Item = T>>,
+    chart: ChartBuilder<'_, '_, DB>,
+) -> Result<(), PlotError<DE>>
+where
+    f64: TryFrom<T>,
+    T: Clone,
+    DB: DrawingBackend<ErrorType = DE>,
+    DE: Error + Send + Sync,
+{
+    let data = PlotData::from_slice(data).ok_or(PlotError::SliceSizeError)?;
+
+    if data.x.len() < 2 {
+        return Err(PlotError::SliceSizeError);
+    }
+
+    log::trace!("Plotting data: {data:?}");
+
+    let mut chart = prepare_chart(chart, &data)?;
+
+    for (y, color) in data.y.into_iter().zip(PLOT_COLORS.iter().cycle()) {
+        let xy_data = data
+            .x
+            .iter()
+            .copied()
+            .zip(y.into_iter())
+            .collect::<Vec<_>>();
+
+        let fit = ChebyshevFit::new_auto(&xy_data, DegreeBound::Custom(10), &score::Aic)?;
+
+        log::trace!("Autofit got: {fit}");
+
+        chart.draw_series(LineSeries::new(
+            (0..=100)
+                .map(|d| {
+                    let x = (data.x_range.end - data.x_range.start) * d as f64 / 100.0
+                        + data.x_range.start;
+                    (x, fit.y(x).unwrap())
+                })
+                .collect::<Vec<_>>()
+                .into_iter(),
+            color,
+        ))?;
+
+        let style: ShapeStyle = <&RGBColor as Into<ShapeStyle>>::into(color).filled();
+
+        chart.draw_series(
+            xy_data
+                .into_iter()
+                .map(|(x, y)| Circle::new((x, y), 3.0, style)),
+        )?;
+    }
+
+    Ok(())
+}
+
+/// Plots the data with automatic curve approximation and saves it to a file. See [`plot_auto`] for info about plotting.
+pub fn plot_auto_to_file<T, U: Table<Item = T>>(
+    data: TableSlice<'_, U>,
+    path: &Path,
+) -> Result<(), PlotError<impl Error + use<T, U>>>
+where
+    f64: TryFrom<T>,
+    T: Clone,
+{
+    let root = BitMapBackend::new(path, (800, 600)).into_drawing_area();
+
+    root.fill(&WHITE)?;
+
+    let chart = ChartBuilder::on(&root);
+
+    plot_auto(data, chart)?;
 
     // To avoid the IO failure being ignored silently, we manually call the present function
     root.present()?;
