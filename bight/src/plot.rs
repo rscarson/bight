@@ -1,19 +1,277 @@
 //! Utilites for plotting data from table slices. Only minimal configuration is supported. The
 //! intended usage is previewing the data.
 
-use std::{error::Error, ops::Range, path::Path};
+use std::{
+    error::Error,
+    fmt::Debug,
+    num::NonZero,
+    ops::Range,
+    path::{Path, PathBuf},
+};
 
 use crate::table::{Table, TableSlice};
 
 use plotters::{coord::types::RangedCoordf64, prelude::*, style::full_palette::PURPLE};
 use polyfit::{ChebyshevFit, MonomialFit, score, statistics::DegreeBound};
 
+#[derive(Default, Clone, Debug)]
+pub enum PlotLimits {
+    #[default]
+    MinMax,
+    MinMaxOrZero,
+    Custom(Range<f64>),
+}
+
+#[derive(Debug)]
+pub struct PlotOptions {
+    pub limits_x: PlotLimits,
+    pub limits_y: PlotLimits,
+    pub label: String,
+    pub label_x: String,
+    pub label_y: String,
+    pub size: (u32, u32),
+    pub approx_points: NonZero<u64>,
+}
+
+impl PlotOptions {
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl Default for PlotOptions {
+    fn default() -> Self {
+        Self {
+            limits_x: PlotLimits::default(),
+            limits_y: PlotLimits::default(),
+            label: String::from("Data preview"),
+            label_x: String::from("x values"),
+            label_y: String::from("y values"),
+            size: (800, 600),
+            approx_points: NonZero::new(100).unwrap(),
+        }
+    }
+}
+
+#[derive(Default, Clone, Copy)]
+pub enum PlotType {
+    #[default]
+    Scatter,
+    Segments,
+    Linear,
+    Curve,
+}
+
+#[derive(Default)]
+pub enum DrawType {
+    #[default]
+    Points,
+    Segments,
+}
+
+#[derive(Default)]
+pub struct DataOptions {
+    pub plot_type: DrawType,
+}
+
+pub enum PlotData {
+    Points(Vec<(f64, f64)>),
+    Function {
+        f: Box<dyn Fn(f64) -> f64>,
+        range: Range<f64>,
+        points: NonZero<u64>,
+    },
+}
+
+impl Debug for PlotData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Points(data) => write!(f, "Points data: {data:?}"),
+            Self::Function {
+                f: _,
+                range,
+                points: _,
+            } => write!(f, "Function data on range {range:?}"),
+        }
+    }
+}
+
+impl PlotData {
+    pub fn plot<DB, DE>(
+        &self,
+        chart: &mut FloatChartContext<'_, DB>,
+        plot_type: DrawType,
+        style: impl Into<ShapeStyle>,
+    ) -> Result<(), PlotError<DE>>
+    where
+        DB: DrawingBackend<ErrorType = DE>,
+        DE: Error + Send + Sync,
+    {
+        let style = style.into();
+
+        let point_iter = self.point_iter();
+
+        match plot_type {
+            DrawType::Points => {
+                chart.draw_series(point_iter.map(|(x, y)| Circle::new((x, y), 3.0, style)))?;
+            }
+            DrawType::Segments => {
+                chart.draw_series(LineSeries::new(point_iter, style))?;
+            }
+        }
+        Ok(())
+    }
+    pub fn point_iter(&self) -> Box<dyn Iterator<Item = (f64, f64)> + '_> {
+        let iter: Box<dyn Iterator<Item = (f64, f64)> + '_> = match self {
+            PlotData::Points(data) => Box::new(data.iter().copied()),
+
+            PlotData::Function { f, range, points } => {
+                let points: u64 = (*points).into();
+                Box::new((0u64..points).map(move |p| {
+                    let x = (range.end - range.start) / ((points - 1) as f64) * (p as f64)
+                        + range.start;
+                    let y = f(x);
+                    (x, y)
+                }))
+            }
+        };
+
+        iter
+    }
+
+    pub fn owned_data(&self) -> Vec<(f64, f64)> {
+        match self {
+            PlotData::Points(data) => data.clone(),
+            PlotData::Function {
+                f: _,
+                range: _,
+                points: _,
+            } => self.point_iter().collect(),
+        }
+    }
+
+    pub fn x_range(&self) -> Option<Range<f64>> {
+        match self {
+            Self::Points(data) => {
+                let mut data = data.iter().copied();
+                let (mut x_min, _) = data.next()?;
+                let mut x_max = x_min;
+
+                for (x, _y) in data {
+                    if x < x_min {
+                        x_min = x;
+                    }
+                    if x > x_max {
+                        x_max = x;
+                    }
+                }
+                Some(x_min..x_max)
+            }
+            Self::Function {
+                f: _,
+                range,
+                points: _,
+            } => Some(range.clone()),
+        }
+    }
+
+    /// Changes on which range of x values the PlotData::Function is plotted. Does not adjust
+    /// number of approximation points. Has no effect on PlotData::Points
+    pub fn set_x_range(&mut self, range: Range<f64>) {
+        if let PlotData::Function {
+            f: _,
+            range: self_range,
+            points: _,
+        } = self
+        {
+            *self_range = range
+        }
+    }
+
+    pub fn y_range(&self) -> Option<Range<f64>> {
+        let mut data = self.point_iter();
+        let (_, mut y_min) = data.next()?;
+        let mut y_max = y_min;
+
+        for (_x, y) in data {
+            if y < y_min {
+                y_min = y;
+            }
+            if y > y_max {
+                y_max = y;
+            }
+        }
+        Some(y_min..y_max)
+    }
+
+    pub fn from_iters(
+        x: impl Iterator<Item: TryInto<f64>>,
+        y: impl Iterator<Item: TryInto<f64>>,
+    ) -> Self {
+        let data: Vec<(f64, f64)> = x
+            .zip(y)
+            .map(|(x, y)| {
+                (
+                    x.try_into().unwrap_or_default(),
+                    y.try_into().unwrap_or_default(),
+                )
+            })
+            .collect();
+
+        Self::Points(data)
+    }
+
+    /// Approximates the data with a linear function y = a * x + b. Returns the approximation and
+    /// its coefficients (a, b). Note that the approximation will clone all original points, which
+    /// can be a very heavy operation if the original data is a function with many approximation
+    /// points.
+    pub fn linear_approximation(&self, approx_points: NonZero<u64>) -> Option<(Self, f64, f64)> {
+        let data = self.owned_data();
+        let range = self.x_range()?;
+        let fit =
+            MonomialFit::new(data, 1).expect("The fitting cannnot fail with these parameters");
+
+        let (a, b) = (fit.coefficients()[0], fit.coefficients()[1]);
+
+        Some((
+            Self::Function {
+                f: Box::new(move |x: f64| fit.as_polynomial().y(x)),
+                range,
+                points: approx_points,
+            },
+            a,
+            b,
+        ))
+    }
+
+    /// Approximates the data with a Chebyshev polynomial of a variable degree. Returns the approximation.
+    /// Note that the approximation will clone all original points, which
+    /// can be a very heavy operation if the original data is a function with many approximation
+    /// points.
+    pub fn curve_approximation(&self, approx_points: NonZero<u64>) -> Option<Self> {
+        let data = self.owned_data();
+        let range = self.x_range()?;
+
+        let fit = ChebyshevFit::new_auto(data, DegreeBound::Custom(10), &score::Aic).ok()?;
+
+        Some(Self::Function {
+            f: Box::new(move |x: f64| fit.as_polynomial().y(x)),
+            range,
+            points: approx_points,
+        })
+    }
+}
+
+pub enum PlotOutput {
+    BitMapFile(PathBuf),
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum PlotError<DE: Error + Send + Sync> {
     #[error("Failed to convert cells into numeric values")]
     DataConversionError,
-    #[error("At least 2*1 slice is required to plot")]
-    SliceSizeError,
+    #[error("There was not enough data to plot with the given options")]
+    SizeError,
     #[error(transparent)]
     DrawingError(#[from] DrawingAreaErrorKind<DE>),
     #[error(transparent)]
@@ -22,51 +280,90 @@ pub enum PlotError<DE: Error + Send + Sync> {
 
 const PLOT_COLORS: [RGBColor; 5] = [BLUE, RED, BLACK, GREEN, PURPLE];
 
+pub fn plot(
+    mut data: Vec<PlotData>,
+    plot_types: Vec<PlotType>,
+    mut options: PlotOptions,
+    output: &PlotOutput,
+) -> Result<(), PlotError<impl Error + Send + Sync + use<>>> {
+    let PlotOutput::BitMapFile(path) = output;
+
+    let root = BitMapBackend::new(path, options.size).into_drawing_area();
+    root.fill(&WHITE)?;
+    let mut chart = prepare_chart(ChartBuilder::on(&root), &mut options, &mut data[..])?;
+
+    for ((data, plot_type), color) in data
+        .into_iter()
+        .zip(plot_types.into_iter())
+        .zip(PLOT_COLORS.iter().cycle())
+    {
+        let style: ShapeStyle = <&RGBColor as Into<ShapeStyle>>::into(color).filled();
+
+        match plot_type {
+            PlotType::Scatter => {
+                data.plot(&mut chart, DrawType::Points, style)?;
+            }
+            PlotType::Segments => {
+                data.plot(&mut chart, DrawType::Points, style)?;
+                data.plot(&mut chart, DrawType::Segments, style)?;
+            }
+            PlotType::Linear => {
+                let lin_data = data
+                    .linear_approximation(options.approx_points)
+                    .ok_or(PlotError::SizeError)?
+                    .0;
+                data.plot(&mut chart, DrawType::Points, style)?;
+                lin_data.plot(&mut chart, DrawType::Segments, style)?;
+            }
+            PlotType::Curve => {
+                let curve_data = data
+                    .curve_approximation(options.approx_points)
+                    .ok_or(PlotError::SizeError)?;
+                data.plot(&mut chart, DrawType::Points, style)?;
+                curve_data.plot(&mut chart, DrawType::Segments, style)?;
+            }
+        }
+    }
+
+    // To avoid the IO failure being ignored silently, we manually call the present function
+    root.present()?;
+    log::info!("Plot has been saved to {path:?}");
+
+    Ok(())
+}
+
+pub fn plot_slice_default_with_type<T, TB>(
+    data: TableSlice<'_, TB>,
+    plot_type: PlotType,
+    file: PathBuf,
+) -> Result<(), PlotError<impl Error + use<T, TB>>>
+where
+    f64: TryFrom<T>,
+    T: Clone,
+    TB: Table<Item = T>,
+{
+    let data = prepare_data(data).ok_or(PlotError::SizeError)?;
+
+    log::trace!("Plotting data: {data:?}");
+
+    let plot_types = data.iter().map(|_| plot_type).collect();
+
+    plot(
+        data,
+        plot_types,
+        PlotOptions::default(),
+        &PlotOutput::BitMapFile(file),
+    )?;
+
+    Ok(())
+}
+
 /// Plots the data from the slice using straight segments to connect the points.
 ///
 /// Requires a TableSlice to be at least of width 2 and height 1. Interprets the first column as x
 /// values, and the rest as y values. Plots y(x) for each column of y values on the same plot. The
 /// data is converted to floats with the [`TryFrom<T>`] trait. The errors of conversion are
 /// ignored, and 0.0 is used for value conversion of which has failed.
-pub fn plot_segments<T, DB, DE>(
-    data: TableSlice<'_, impl Table<Item = T>>,
-    chart: ChartBuilder<'_, '_, DB>,
-) -> Result<(), PlotError<DE>>
-where
-    f64: TryFrom<T>,
-    T: Clone,
-    DB: DrawingBackend<ErrorType = DE>,
-    DE: Error + Send + Sync,
-{
-    let data = PlotData::from_slice(data).ok_or(PlotError::SliceSizeError)?;
-
-    log::trace!("Plotting data: {data:?}");
-
-    let mut chart = prepare_chart(chart, &data)?;
-
-    for (column, color) in data.y.into_iter().zip(PLOT_COLORS.iter().cycle()) {
-        let xy_data = data
-            .x
-            .iter()
-            .copied()
-            .zip(column.into_iter())
-            .collect::<Vec<_>>();
-
-        chart.draw_series(LineSeries::new(xy_data.iter().copied(), color))?;
-
-        let style: ShapeStyle = <&RGBColor as Into<ShapeStyle>>::into(color).filled();
-
-        chart.draw_series(
-            xy_data
-                .into_iter()
-                .map(|(x, y)| Circle::new((x, y), 3.0, style)),
-        )?;
-    }
-
-    Ok(())
-}
-
-/// Plots the data and saves it to a file. See [`plot_segments`] for info about plotting.
 pub fn plot_segments_to_file<T, U: Table<Item = T>>(
     data: TableSlice<'_, U>,
     path: &Path,
@@ -75,17 +372,7 @@ where
     f64: TryFrom<T>,
     T: Clone,
 {
-    let root = BitMapBackend::new(path, (800, 600)).into_drawing_area();
-
-    root.fill(&WHITE)?;
-
-    let chart = ChartBuilder::on(&root);
-
-    plot_segments(data, chart)?;
-
-    // To avoid the IO failure being ignored silently, we manually call the present function
-    root.present()?;
-    log::info!("Plot of {data:?} has been saved to {path:?}");
+    plot_slice_default_with_type(data, PlotType::Segments, path.to_owned())?;
 
     Ok(())
 }
@@ -96,63 +383,6 @@ where
 /// values, and the rest as y values. Plots y(x) for each column of y values on the same plot. The
 /// data is converted to floats with the [`TryFrom<T>`] trait. The errors of conversion are
 /// ignored, and 0.0 is used for value conversion of which has failed.
-pub fn plot_auto<T, DB, DE>(
-    data: TableSlice<'_, impl Table<Item = T>>,
-    chart: ChartBuilder<'_, '_, DB>,
-) -> Result<(), PlotError<DE>>
-where
-    f64: TryFrom<T>,
-    T: Clone,
-    DB: DrawingBackend<ErrorType = DE>,
-    DE: Error + Send + Sync,
-{
-    let data = PlotData::from_slice(data).ok_or(PlotError::SliceSizeError)?;
-
-    if data.x.len() < 2 {
-        return Err(PlotError::SliceSizeError);
-    }
-
-    log::trace!("Plotting data: {data:?}");
-
-    let mut chart = prepare_chart(chart, &data)?;
-
-    for (y, color) in data.y.into_iter().zip(PLOT_COLORS.iter().cycle()) {
-        let xy_data = data
-            .x
-            .iter()
-            .copied()
-            .zip(y.into_iter())
-            .collect::<Vec<_>>();
-
-        let fit = ChebyshevFit::new_auto(&xy_data, DegreeBound::Custom(10), &score::Aic)?;
-
-        log::trace!("Autofit got: {fit}");
-
-        chart.draw_series(LineSeries::new(
-            (0..=100)
-                .map(|d| {
-                    let x = (data.x_range.end - data.x_range.start) * d as f64 / 100.0
-                        + data.x_range.start;
-                    (x, fit.y(x).unwrap())
-                })
-                .collect::<Vec<_>>()
-                .into_iter(),
-            color,
-        ))?;
-
-        let style: ShapeStyle = <&RGBColor as Into<ShapeStyle>>::into(color).filled();
-
-        chart.draw_series(
-            xy_data
-                .into_iter()
-                .map(|(x, y)| Circle::new((x, y), 3.0, style)),
-        )?;
-    }
-
-    Ok(())
-}
-
-/// Plots the data with automatic curve approximation and saves it to a file. See [`plot_auto`] for info about plotting.
 pub fn plot_auto_to_file<T, U: Table<Item = T>>(
     data: TableSlice<'_, U>,
     path: &Path,
@@ -161,126 +391,118 @@ where
     f64: TryFrom<T>,
     T: Clone,
 {
-    let root = BitMapBackend::new(path, (800, 600)).into_drawing_area();
-
-    root.fill(&WHITE)?;
-
-    let chart = ChartBuilder::on(&root);
-
-    plot_auto(data, chart)?;
-
-    // To avoid the IO failure being ignored silently, we manually call the present function
-    root.present()?;
-    log::info!("Plot of {data:?} has been saved to {path:?}");
+    plot_slice_default_with_type(data, PlotType::Curve, path.to_owned())?;
 
     Ok(())
 }
 
-/// Plots the data from the slice, lineary approiximating each data series (y = ax + b), returning the
-/// coefficients `(a, b)` for each series on success.
+/// Plots the data from the slice, lineary approiximating each data series (y = ax + b).
 ///
 /// Requires a TableSlice to be at least of width 2 and height 1. Interprets the first column as x
 /// values, and the rest as y values. Plots y(x) for each column of y values on the same plot. The
 /// data is converted to floats with the [`TryFrom<T>`] trait. The errors of conversion are
 /// ignored, and 0.0 is used for value conversion of which has failed.
-pub fn plot_linear<T, DB, DE>(
-    data: TableSlice<'_, impl Table<Item = T>>,
-    chart: ChartBuilder<'_, '_, DB>,
-) -> Result<Vec<(f64, f64)>, PlotError<DE>>
-where
-    f64: TryFrom<T>,
-    T: Clone,
-    DB: DrawingBackend<ErrorType = DE>,
-    DE: Error + Send + Sync,
-{
-    let data = PlotData::from_slice(data).ok_or(PlotError::SliceSizeError)?;
-
-    if data.x.len() < 2 {
-        return Err(PlotError::SliceSizeError);
-    }
-
-    log::trace!("Plotting data: {data:?}");
-
-    let mut chart = prepare_chart(chart, &data)?;
-
-    let mut coefs = Vec::new();
-
-    for (column, color) in data.y.into_iter().zip(PLOT_COLORS.iter().cycle()) {
-        let xy_data = data
-            .x
-            .iter()
-            .copied()
-            .zip(column.into_iter())
-            .collect::<Vec<_>>();
-
-        let fit =
-            MonomialFit::new(&xy_data, 1).expect("The fitting cannnot fail with these parameters");
-
-        coefs.push((fit.coefficients()[0], fit.coefficients()[1]));
-
-        chart.draw_series(LineSeries::new(
-            (0..=100)
-                .map(|d| {
-                    let x = (data.x_range.end - data.x_range.start) * d as f64 / 100.0
-                        + data.x_range.start;
-                    (x, fit.y(x).unwrap())
-                })
-                .collect::<Vec<_>>()
-                .into_iter(),
-            color,
-        ))?;
-
-        let style: ShapeStyle = <&RGBColor as Into<ShapeStyle>>::into(color).filled();
-
-        chart.draw_series(
-            xy_data
-                .into_iter()
-                .map(|(x, y)| Circle::new((x, y), 3.0, style)),
-        )?;
-    }
-
-    Ok(coefs)
-}
-
-/// Plots the data with linear approximation and saves it to a file. See [`plot_linear`] for info about plotting.
 pub fn plot_linear_to_file<T, U: Table<Item = T>>(
     data: TableSlice<'_, U>,
     path: &Path,
-) -> Result<Vec<(f64, f64)>, PlotError<impl Error + use<T, U>>>
+) -> Result<(), PlotError<impl Error + use<T, U>>>
 where
     f64: TryFrom<T>,
     T: Clone,
 {
-    let root = BitMapBackend::new(path, (800, 600)).into_drawing_area();
+    plot_slice_default_with_type(data, PlotType::Linear, path.to_owned())?;
 
-    root.fill(&WHITE)?;
+    Ok(())
+}
 
-    let chart = ChartBuilder::on(&root);
+fn fix_ranges(
+    options: &mut PlotOptions,
+    data: &mut [PlotData],
+) -> Option<(Range<f64>, Range<f64>)> {
+    let mut x_range = match &options.limits_x {
+        PlotLimits::Custom(range) => range.clone(),
+        PlotLimits::MinMax | PlotLimits::MinMaxOrZero => {
+            let mut data = data.iter().map(|d| d.x_range());
+            let mut x_range = data.next()??;
 
-    let coefs = plot_linear(data, chart)?;
+            for range in data {
+                let range = range?;
+                if range.start < x_range.start {
+                    x_range.start = range.start;
+                }
+                if range.end > x_range.end {
+                    x_range.end = range.end;
+                }
+            }
+            x_range
+        }
+    };
 
-    // To avoid the IO failure being ignored silently, we manually call the present function
-    root.present()?;
-    log::info!("Plot of {data:?} has been saved to {path:?}");
+    if matches!(options.limits_x, PlotLimits::MinMaxOrZero) {
+        if x_range.start > 0.0 {
+            x_range.start = 0.0
+        }
+        if x_range.end < 0.0 {
+            x_range.end = 0.0
+        }
+    }
 
-    Ok(coefs)
+    for data in &mut *data {
+        data.set_x_range(x_range.clone());
+    }
+
+    let mut y_range = match &options.limits_y {
+        PlotLimits::Custom(range) => range.clone(),
+        PlotLimits::MinMax | PlotLimits::MinMaxOrZero => {
+            let mut data = data.iter().map(|d| d.y_range());
+            let mut y_range = data.next()??;
+
+            for range in data {
+                let range = range?;
+                if range.start < y_range.start {
+                    y_range.start = range.start;
+                }
+                if range.end > y_range.end {
+                    y_range.end = range.end;
+                }
+            }
+            y_range
+        }
+    };
+
+    if matches!(options.limits_y, PlotLimits::MinMaxOrZero) {
+        if y_range.start > 0.0 {
+            y_range.start = 0.0
+        }
+        if y_range.end < 0.0 {
+            y_range.end = 0.0
+        }
+    }
+
+    options.limits_x = PlotLimits::Custom(x_range.clone());
+    options.limits_y = PlotLimits::Custom(y_range.clone());
+
+    Some((x_range, y_range))
 }
 
 type FloatChartContext<'a, DB> = ChartContext<'a, DB, Cartesian2d<RangedCoordf64, RangedCoordf64>>;
 fn prepare_chart<'a, 'b, DB, DE>(
     mut chart: ChartBuilder<'a, 'b, DB>,
-    data: &PlotData,
+    options: &mut PlotOptions,
+    data: &mut [PlotData],
 ) -> Result<FloatChartContext<'a, DB>, PlotError<DE>>
 where
     DB: DrawingBackend<ErrorType = DE>,
     DE: Error + Send + Sync,
 {
+    let (x_range, y_range) = fix_ranges(options, data).ok_or(PlotError::SizeError)?;
+
     let mut chart = chart
         .margin(10)
-        .caption("Data preiew", ("sans-serif", 16))
+        .caption(options.label.clone(), ("sans-serif", 16))
         .set_label_area_size(LabelAreaPosition::Left, 60)
         .set_label_area_size(LabelAreaPosition::Bottom, 40)
-        .build_cartesian_2d(data.x_range.clone(), data.y_range.clone())?;
+        .build_cartesian_2d(x_range, y_range)?;
 
     chart
         .configure_mesh()
@@ -295,80 +517,38 @@ where
     Ok(chart)
 }
 
-#[derive(Debug, Clone)]
-pub struct PlotData {
-    x: Vec<f64>,
-    y: Vec<Vec<f64>>,
-    x_range: Range<f64>,
-    y_range: Range<f64>,
-}
+/// Prepares f64 data for plotting from a table slice. Interprets the first column as x
+/// values, and the rest as y values. Returns None if the slice is less than 2x1. The errors of conversion are
+/// ignored, and 0.0 is used for value conversion of which has failed.
+pub fn prepare_data<T>(data: TableSlice<'_, impl Table<Item = T>>) -> Option<Vec<PlotData>>
+where
+    f64: TryFrom<T>,
+    T: Clone,
+{
+    let mut data_cols = data.cols();
 
-impl PlotData {
-    /// Prepares f64 data for plotting from a table slice. Interprets the first column as x
-    /// values, and the rest as y values. Returns None if the slice is less than 2x1. The errors of conversion are
-    /// ignored, and 0.0 is used for value conversion of which has failed.
-    pub fn from_slice<T>(data: TableSlice<'_, impl Table<Item = T>>) -> Option<Self>
-    where
-        f64: TryFrom<T>,
-        T: Clone,
-    {
-        let mut data_cols = data.cols();
-
-        let x: Vec<f64> = data_cols
-            .next()?
-            .into_iter()
-            .map(|x: Option<&T>| {
-                x.map(|x: &T| x.clone().try_into().unwrap_or_default())
-                    .unwrap_or_default()
-            })
-            .collect();
-
-        let y: Vec<Vec<f64>> = data_cols
-            .map(|c| {
-                c.into_iter()
-                    .map(|x: Option<&T>| {
-                        x.map(|x: &T| -> f64 { x.clone().try_into().unwrap_or_default() })
-                            .unwrap_or_default()
-                    })
-                    .collect::<Vec<f64>>()
-            })
-            .collect::<Vec<_>>();
-
-        let (y_min, y_max) = {
-            let mut y = y.iter().flat_map(|v| v.iter());
-            let y0 = *y.next()?;
-            y.fold((y0, y0), |(mut y_min, mut y_max), &y| {
-                if y_min > y {
-                    y_min = y
-                }
-                if y_max < y {
-                    y_max = y
-                }
-                (y_min, y_max)
-            })
-        };
-
-        let (x_min, x_max) = {
-            let mut x = x.iter();
-            let x0 = *x.next()?;
-            x.fold((x0, x0), |(mut x_min, mut x_max), &x| {
-                if x_min > x {
-                    x_min = x
-                }
-                if x_max < x {
-                    x_max = x
-                }
-                (x_min, x_max)
-            })
-        };
-
-        Some(Self {
-            x,
-            y,
-            x_range: x_min..x_max,
-            y_range: y_min..y_max,
+    let x: Vec<f64> = data_cols
+        .next()?
+        .into_iter()
+        .map(|x: Option<&T>| {
+            x.map(|x: &T| x.clone().try_into().unwrap_or_default())
+                .unwrap_or_default()
         })
-    }
+        .collect();
+
+    let data: Vec<_> = data_cols
+        .map(|c| {
+            PlotData::from_iters(
+                x.iter().copied(),
+                c.into_iter().map(|x: Option<&T>| {
+                    x.map(|x: &T| -> f64 { x.clone().try_into().unwrap_or_default() })
+                        .unwrap_or_default()
+                }),
+            )
+        })
+        .collect::<Vec<_>>();
+
+    Some(data)
 }
 
 #[cfg(test)]
@@ -406,10 +586,11 @@ mod test {
         let data = normal_float_data_table();
 
         let path = std::path::PathBuf::from(format!("{TEST_OUTPUT_PATH}test_plot_linear.png"));
+        plot_linear_to_file(data.full_slice(), &path)?;
 
-        let coefs = plot_linear_to_file(data.full_slice(), &path)?;
-
-        eprintln!("Linear coefs in test: {coefs:?}");
+        // let coefs = plot_linear_to_file(data.full_slice(), &path)?;
+        //
+        // eprintln!("Linear coefs in test: {coefs:?}");
 
         Ok(())
     }
