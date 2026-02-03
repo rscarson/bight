@@ -84,7 +84,7 @@ impl FromLua for TableValue {
             Number(n) => Ok(TableValue::Number(n)),
             Integer(n) => Ok(TableValue::Number(n as f64)),
             _ => match value.to_string() {
-                Ok(s) => Ok(TableValue::from_stringable(s)),
+                Ok(s) => Ok(TableValue::from_text(s)),
                 Err(e) => Ok(TableValue::lua_error(e)),
             },
         }

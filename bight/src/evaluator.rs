@@ -1,3 +1,12 @@
+//! The module that contains the base evaluation logic.
+//! The EvaluatorTable evaluates a TableValue for each non-empty cell of its source. If the source
+//! starts with '\', that backslash is ignored. If the source starts with '=', the '=' is ignored
+//! and the rest of the source is interpreted as a lua formula (the '=' is replaced with "return "
+//! and the value of the chuck is evaluated. See [`lua`] module for more info). Else the value is the source string itself.
+//!
+//! Some evaluation API is exposed. The expected way of accuiring evaluation results is from
+//! [`Table`] trait implementation on [`EvaluatorTable`] (see item-level docs for more info).
+
 pub mod interaction;
 pub mod lua;
 
@@ -11,29 +20,45 @@ use crate::{
     table::{HashTable, Table, cell::CellPos},
 };
 
+/// The type representing an error that occured during evaluation. Can be caused either by an error
+/// that was raised in the code of the cell being evaluated, or by a dependency cycle.
 #[derive(Debug, thiserror::Error, Clone)]
 pub enum TableError {
+    /// A lua error was raised during the evaluation
     #[error(transparent)]
     LuaError(Arc<mlua::Error>),
+    /// Non-lua error raised during the evaluation
     #[error(transparent)]
     OtherError(Arc<dyn Error + Send + Sync>),
 }
 #[derive(Debug, Clone)]
+/// The value that the sourcewas evaluated to. Note that error during evaluation is also considered
+/// a value, and it will be propagated into any cell that depend on the cell that raised the error
+/// (The [`mlua::IntoLua`] implementation for [`TableValue::Err`] returns a lua error)
 pub enum TableValue {
+    /// An empty value. This is the value of a cell with no source, or the cell with a formula that
+    /// returned nil
     Empty,
+    /// Value of a non-formula cell or a cell with a formula that returned a string
     Text(Arc<str>), // Using Arc<str> instead of String as TableValue is never mutated, but cloning happens often
+    /// Value of a cell a formula in which returned a number (float or integer)
     Number(f64),
+    /// An error occured during the evaluation
     Err(TableError),
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum EvalationError {
+/// The error that occured during evaluation of a cell's value. This is only returned when a
+/// dependency cycle was present right after the request. All other cells that depend on the value
+/// of the cell that got this response are evaluated normally. Usually, this error should not be
+/// handled and be let bubble up so all other cell also return this error
+pub enum EvaluationError {
     #[error("Dependency cycle detected")]
     DependencyCycle,
 }
 
-impl From<Result<TableValue, EvalationError>> for TableValue {
-    fn from(value: Result<TableValue, EvalationError>) -> Self {
+impl From<Result<TableValue, EvaluationError>> for TableValue {
+    fn from(value: Result<TableValue, EvaluationError>) -> Self {
         match value {
             Ok(val) => val,
             Err(e) => TableValue::other_error(e),
@@ -42,22 +67,26 @@ impl From<Result<TableValue, EvalationError>> for TableValue {
 }
 
 impl TableValue {
+    /// Shorthand for creating a non-lua error table value
     pub fn other_error(error: impl Error + Send + Sync + 'static) -> Self {
         Self::Err(TableError::OtherError(Arc::new(error)))
     }
+    /// Shorthand for creating a lua error table value
     pub fn lua_error(error: mlua::Error) -> Self {
         Self::Err(TableError::LuaError(Arc::new(error)))
     }
     pub fn is_err(&self) -> bool {
         matches!(self, Self::Err(_))
     }
+    /// Formats the value to the giving length, aligning to the right and filling with whitespaces
+    /// if the formatted value's length is less than requested.
     pub fn format_to_length(&self, length: usize) -> String {
         format!("{:<length$}", self.to_string().lines().next().unwrap_or(""))
             .chars()
             .take(length)
             .collect()
     }
-    pub fn from_stringable(s: impl ToString) -> Self {
+    pub fn from_text(s: impl ToString) -> Self {
         Self::Text(s.to_string().into())
     }
     pub fn from_number(n: impl Into<f64>) -> Self {
@@ -289,13 +318,7 @@ mod test {
     }
     #[test]
     fn format_string() {
-        assert_eq!(
-            TableValue::from_stringable("6").format_to_length(5),
-            "6    "
-        );
-        assert_eq!(
-            TableValue::from_stringable("678910").format_to_length(5),
-            "67891"
-        );
+        assert_eq!(TableValue::from_text("6").format_to_length(5), "6    ");
+        assert_eq!(TableValue::from_text("678910").format_to_length(5), "67891");
     }
 }

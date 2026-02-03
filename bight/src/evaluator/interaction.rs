@@ -4,7 +4,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use crate::{
-    evaluator::{EvalationError, TableValue, ValueTable},
+    evaluator::{EvaluationError, TableValue, ValueTable},
     table::{HashTable, cell::CellPos},
 };
 
@@ -40,7 +40,7 @@ impl<'a> CellInfo<'a> {
     pub fn source(&self) -> &Arc<str> {
         self.source
     }
-    pub async fn get(&self, req: CellPos) -> Result<TableValue, EvalationError> {
+    pub async fn get(&self, req: CellPos) -> Result<TableValue, EvaluationError> {
         log::debug!("ValueRequest for {} by {}", req, self.pos);
 
         let mut dep_tables = self.dep_tables.lock().await;
@@ -54,7 +54,7 @@ impl<'a> CellInfo<'a> {
         );
         if has_dependency_cycle(&dep_tables.0, self.pos, &mut HashMap::new()) {
             log::warn!("Dependency cycle starting at {} detected!", self.pos);
-            return Err(EvalationError::DependencyCycle);
+            return Err(EvaluationError::DependencyCycle);
         }
 
         drop(dep_tables);
