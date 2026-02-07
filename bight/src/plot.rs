@@ -244,21 +244,25 @@ impl PlotData {
         ))
     }
 
-    /// Approximates the data with a Chebyshev polynomial of a variable degree. Returns the approximation.
+    /// Approximates the data with a Chebyshev polynomial of a variable degree. Returns the approximation and a human-readable description.
     /// Note that the approximation will clone all original points, which
     /// can be a very heavy operation if the original data is a function with many approximation
     /// points.
-    pub fn curve_approximation(&self, approx_points: NonZero<u64>) -> Option<Self> {
+    pub fn curve_approximation(&self, approx_points: NonZero<u64>) -> Option<(Self, String)> {
         let data = self.owned_data();
         let range = self.x_range()?;
 
         let fit = ChebyshevFit::new_auto(data, DegreeBound::Custom(10), &score::Aic).ok()?;
 
-        Some(Self::Function {
-            f: Box::new(move |x: f64| fit.as_polynomial().y(x)),
-            range,
-            points: approx_points,
-        })
+        let desc = fit.equation();
+        Some((
+            Self::Function {
+                f: Box::new(move |x: f64| fit.as_polynomial().y(x)),
+                range,
+                points: approx_points,
+            },
+            desc,
+        ))
     }
 }
 
@@ -285,12 +289,14 @@ pub fn plot(
     plot_types: Vec<PlotType>,
     mut options: PlotOptions,
     output: &PlotOutput,
-) -> Result<(), PlotError<impl Error + Send + Sync + use<>>> {
+) -> Result<Vec<String>, PlotError<impl Error + Send + Sync + use<>>> {
     let PlotOutput::BitMapFile(path) = output;
 
     let root = BitMapBackend::new(path, options.size).into_drawing_area();
     root.fill(&WHITE)?;
     let mut chart = prepare_chart(ChartBuilder::on(&root), &mut options, &mut data[..])?;
+
+    let mut output = Vec::new();
 
     for ((data, plot_type), color) in data
         .into_iter()
@@ -302,25 +308,30 @@ pub fn plot(
         match plot_type {
             PlotType::Scatter => {
                 data.plot(&mut chart, DrawType::Points, style)?;
+                output.push(String::new());
             }
             PlotType::Segments => {
                 data.plot(&mut chart, DrawType::Points, style)?;
                 data.plot(&mut chart, DrawType::Segments, style)?;
+                output.push(String::new());
             }
             PlotType::Linear => {
-                let lin_data = data
+                let (lin_data, a, b) = data
                     .linear_approximation(options.approx_points)
-                    .ok_or(PlotError::SizeError)?
-                    .0;
+                    .ok_or(PlotError::SizeError)?;
                 data.plot(&mut chart, DrawType::Points, style)?;
                 lin_data.plot(&mut chart, DrawType::Segments, style)?;
+
+                output.push(format!("y = {a} * x + {b}"));
             }
             PlotType::Curve => {
-                let curve_data = data
+                let (curve_data, desc) = data
                     .curve_approximation(options.approx_points)
                     .ok_or(PlotError::SizeError)?;
                 data.plot(&mut chart, DrawType::Points, style)?;
                 curve_data.plot(&mut chart, DrawType::Segments, style)?;
+
+                output.push(desc);
             }
         }
     }
@@ -329,14 +340,14 @@ pub fn plot(
     root.present()?;
     log::info!("Plot has been saved to {path:?}");
 
-    Ok(())
+    Ok(output)
 }
 
 pub fn plot_slice_default_with_type<T, TB>(
     data: TableSlice<'_, TB>,
     plot_type: PlotType,
     file: PathBuf,
-) -> Result<(), PlotError<impl Error + use<T, TB>>>
+) -> Result<Vec<String>, PlotError<impl Error + use<T, TB>>>
 where
     f64: TryFrom<T>,
     T: Clone,
@@ -353,9 +364,7 @@ where
         plot_types,
         PlotOptions::default(),
         &PlotOutput::BitMapFile(file),
-    )?;
-
-    Ok(())
+    )
 }
 
 /// Plots the data from the slice using straight segments to connect the points.
@@ -367,14 +376,12 @@ where
 pub fn plot_segments_to_file<T, U: Table<Item = T>>(
     data: TableSlice<'_, U>,
     path: &Path,
-) -> Result<(), PlotError<impl Error + use<T, U>>>
+) -> Result<Vec<String>, PlotError<impl Error + use<T, U>>>
 where
     f64: TryFrom<T>,
     T: Clone,
 {
-    plot_slice_default_with_type(data, PlotType::Segments, path.to_owned())?;
-
-    Ok(())
+    plot_slice_default_with_type(data, PlotType::Segments, path.to_owned())
 }
 
 /// Plots the data from the slice, approiximating each data series with a curve
@@ -386,14 +393,12 @@ where
 pub fn plot_auto_to_file<T, U: Table<Item = T>>(
     data: TableSlice<'_, U>,
     path: &Path,
-) -> Result<(), PlotError<impl Error + use<T, U>>>
+) -> Result<Vec<String>, PlotError<impl Error + use<T, U>>>
 where
     f64: TryFrom<T>,
     T: Clone,
 {
-    plot_slice_default_with_type(data, PlotType::Curve, path.to_owned())?;
-
-    Ok(())
+    plot_slice_default_with_type(data, PlotType::Curve, path.to_owned())
 }
 
 /// Plots the data from the slice, lineary approiximating each data series (y = ax + b).
@@ -405,14 +410,12 @@ where
 pub fn plot_linear_to_file<T, U: Table<Item = T>>(
     data: TableSlice<'_, U>,
     path: &Path,
-) -> Result<(), PlotError<impl Error + use<T, U>>>
+) -> Result<Vec<String>, PlotError<impl Error + use<T, U>>>
 where
     f64: TryFrom<T>,
     T: Clone,
 {
-    plot_slice_default_with_type(data, PlotType::Linear, path.to_owned())?;
-
-    Ok(())
+    plot_slice_default_with_type(data, PlotType::Linear, path.to_owned())
 }
 
 fn fix_ranges(
@@ -508,7 +511,8 @@ where
         .configure_mesh()
         .disable_x_mesh()
         .disable_y_mesh()
-        .x_labels(30)
+        .x_labels(10)
+        .y_labels(10)
         .max_light_lines(4)
         .y_desc("y values")
         .x_desc("x values")
@@ -574,23 +578,31 @@ mod test {
 
         let path = std::path::PathBuf::from(format!("{TEST_OUTPUT_PATH}test_plot.png"));
 
-        plot_segments_to_file(data.full_slice(), &path)?;
+        dbg!(plot_segments_to_file(data.full_slice(), &path)?);
 
         Ok(())
     }
 
     #[test]
     #[ignore = "only for manual output inspenction"]
-    /// Saves the plot to a file test_plot.png, which is not cleaned up and can be viewed after the test is run
+    /// Saves the plot to a file test_plot_linear.png, which is not cleaned up and can be viewed after the test is run
     fn plot_linear_to_real_png_file() -> Result<(), Box<dyn Error>> {
         let data = normal_float_data_table();
 
         let path = std::path::PathBuf::from(format!("{TEST_OUTPUT_PATH}test_plot_linear.png"));
-        plot_linear_to_file(data.full_slice(), &path)?;
+        dbg!(plot_linear_to_file(data.full_slice(), &path)?);
 
-        // let coefs = plot_linear_to_file(data.full_slice(), &path)?;
-        //
-        // eprintln!("Linear coefs in test: {coefs:?}");
+        Ok(())
+    }
+
+    #[test]
+    #[ignore = "only for manual output inspenction"]
+    /// Saves the plot to a file test_plot_auto.png, which is not cleaned up and can be viewed after the test is run
+    fn plot_auto_to_real_png_file() -> Result<(), Box<dyn Error>> {
+        let data = normal_float_data_table();
+
+        let path = std::path::PathBuf::from(format!("{TEST_OUTPUT_PATH}test_plot_auto.png"));
+        dbg!(plot_auto_to_file(data.full_slice(), &path)?);
 
         Ok(())
     }
