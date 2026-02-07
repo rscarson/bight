@@ -7,11 +7,14 @@ pub mod bight;
 pub mod csv;
 
 pub use bight::BightFile;
-pub use bight::{load as load_bight, save as save_bight};
-pub use csv::load as load_csv;
+pub use bight::{load as load_bight, load_into as load_bight_into, save as save_bight};
 pub use csv::slice_to_csv_string;
+pub use csv::{load as load_csv, load_into as load_csv_into};
 
 use std::path::Path;
+use std::sync::Arc;
+
+use crate::table::{TableMut, TableRefMut};
 
 /// The error type for conversion from bytes to a bight file
 #[derive(Debug, thiserror::Error)]
@@ -47,7 +50,7 @@ pub enum FileSaveError {
 }
 
 /// Loads a file, guessing the filetype based on the file extension. For specialized functions for
-/// loading a file of a known type see `load` functions in submodules, or their reexports
+/// loading a file of a known type see `load` functions in submodules, or their re-exports
 /// [`load_bight`], [`load_csv`], etc. Return an error if the extension is not supported or the
 /// file is invalid
 pub fn load(path: &Path) -> Result<BightFile, FileLoadError> {
@@ -61,6 +64,32 @@ pub fn load(path: &Path) -> Result<BightFile, FileLoadError> {
         "csv" => csv::load(path),
         ext => Err(FileLoadError::UnsupportedFiletype(ext.to_owned())),
     }
+}
+
+/// Loads a file, guessing the filetype based on the file extension, placing the loaded data into the given
+/// TableRefMut and overwrtiting existing data. Only loads the sources, and ignores the rest of
+/// the data. To fully load a file see [`load`]. For specialized functions for
+/// loading a file of a known type see `load_into` functions in submodules, or their re-exports
+/// [`load_bight_into`], [`load_csv_into`], etc. Return an error if the extension is not supported or the
+/// file is invalid
+///
+/// # Note
+/// This currently uses [`load`] to load into an owned file, and then copies the data into the
+/// TableRefMut. No filetype-specific optimizations are done
+///
+/// # Panincs
+/// This function panics if the provided TableMut implementation panics
+pub fn load_into<T: TableMut<Item: From<Arc<str>>> + ?Sized>(
+    path: &Path,
+    mut table: TableRefMut<'_, T>,
+) -> Result<(), FileLoadError> {
+    let file = load(path)?;
+
+    for (pos, source) in file.source.into_inner_iter() {
+        table.set(pos, Some(source.into()));
+    }
+
+    Ok(())
 }
 
 /// Saves a file, guessing the filetype based on the file extension. For specialized functions for

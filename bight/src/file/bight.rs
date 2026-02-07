@@ -1,11 +1,14 @@
 mod v1;
-use std::path::Path;
+use std::{path::Path, sync::Arc};
 
 use rkyv::{Archive, Deserialize, Serialize, access};
 pub use v1::BightFile;
 use v1::BightFile as BightFileV1;
 
-use crate::file::{DeserializationError, FileLoadError};
+use crate::{
+    file::{DeserializationError, FileLoadError},
+    table::{TableMut, TableRefMut},
+};
 
 /// Contents of a header of a .bight file.  
 ///
@@ -62,6 +65,19 @@ pub fn from_bytes(bytes: &[u8]) -> Result<BightFile, DeserializationError> {
 pub fn load(path: &Path) -> Result<BightFile, FileLoadError> {
     let bytes = std::fs::read(path)?;
     Ok(from_bytes(&bytes)?)
+}
+
+pub fn load_into<T: TableMut<Item: From<Arc<str>>> + ?Sized>(
+    path: &Path,
+    mut table: TableRefMut<'_, T>,
+) -> Result<(), FileLoadError> {
+    let file = load(path)?;
+
+    for (pos, source) in file.source.into_inner_iter() {
+        table.set(pos, Some(source.into()));
+    }
+
+    Ok(())
 }
 
 /// Converst a bight file into bytes for storage

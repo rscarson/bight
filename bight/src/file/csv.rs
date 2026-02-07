@@ -1,8 +1,9 @@
 use std::{fmt::Display, io::Write, path::Path, sync::Arc};
 
 use crate::{
+    evaluator::SourceTable,
     file::{BightFile, DeserializationError, FileLoadError},
-    table::{CellPos, Table, slice::table::TableSlice},
+    table::{CellPos, Table, TableMut, TableRefMut, slice::table::TableSlice},
 };
 
 /// Converst the given table slice into csv using the given writer
@@ -57,7 +58,9 @@ pub fn from_bytes(bytes: &[u8]) -> Result<BightFile, DeserializationError> {
         .into_iter()
         .flatten()
         .collect();
-    Ok(BightFile { source })
+    Ok(BightFile {
+        source: SourceTable::from_source(source),
+    })
 }
 
 // pub fn save(path: &Path, file: &BightFile) -> Result<(), FileSaveError> {
@@ -69,6 +72,19 @@ pub fn from_bytes(bytes: &[u8]) -> Result<BightFile, DeserializationError> {
 pub fn load(path: &Path) -> Result<BightFile, FileLoadError> {
     let bytes = std::fs::read(path)?;
     Ok(from_bytes(&bytes)?)
+}
+
+pub fn load_into<T: TableMut<Item: From<Arc<str>>> + ?Sized>(
+    path: &Path,
+    mut table: TableRefMut<'_, T>,
+) -> Result<(), FileLoadError> {
+    let file = load(path)?;
+
+    for (pos, source) in file.source.into_inner_iter() {
+        table.set(pos, Some(source.into()));
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]

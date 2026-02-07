@@ -13,11 +13,13 @@ pub mod lua;
 use std::{collections::HashSet, error::Error, fmt::Display, sync::Arc};
 
 use futures::future::join_all;
+use hashbrown::hash_map;
 use tokio::sync::{Mutex, RwLock, RwLockWriteGuard, oneshot};
 
 use crate::{
     evaluator::interaction::CellInfo,
-    table::{HashTable, Table, cell::CellPos},
+    file::BightFile,
+    table::{HashTable, Table, TableMut, cell::CellPos},
 };
 
 /// The type representing an error that occured during evaluation. Can be caused either by an error
@@ -119,7 +121,45 @@ impl TryFrom<TableValue> for f64 {
     }
 }
 
-pub type SourceTable = HashTable<Arc<str>>;
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Debug, Default, Clone)]
+pub struct SourceTable {
+    inner: HashTable<Arc<str>>,
+}
+
+impl SourceTable {
+    pub fn inner_iter(&self) -> hash_map::Iter<'_, CellPos, Arc<str>> {
+        self.inner.iter()
+    }
+    pub fn into_inner_iter(self) -> hash_map::IntoIter<CellPos, Arc<str>> {
+        self.inner.into_iter()
+    }
+    pub fn new() -> Self {
+        Self::default()
+    }
+    pub fn from_source(source: HashTable<Arc<str>>) -> Self {
+        Self { inner: source }
+    }
+}
+
+impl Table for SourceTable {
+    type Item = Arc<str>;
+    fn get(&self, pos: CellPos) -> Option<&Self::Item> {
+        self.inner.get(&pos)
+    }
+}
+
+impl TableMut for SourceTable {
+    fn get_mut(&mut self, pos: CellPos) -> Option<&mut Self::Item> {
+        self.inner.get_mut(&pos)
+    }
+    fn set(&mut self, pos: CellPos, item: Option<Self::Item>) {
+        match item {
+            None => self.inner.remove(&pos),
+            Some(item) => self.inner.insert(pos, item),
+        };
+    }
+}
+
 pub type CacheTable = HashTable<RwLock<Option<TableValue>>>;
 pub type ValueTable = HashTable<TableValue>;
 pub type DependencyChannelTable = HashTable<Vec<oneshot::Sender<TableValue>>>;
@@ -127,7 +167,7 @@ pub type GraphTable = HashTable<HashSet<CellPos>>;
 
 #[derive(Debug, Default)]
 pub struct EvaluatorTable {
-    source: SourceTable,
+    file: BightFile,
     result: ValueTable,
     required_by: GraphTable,  // required_by is inversed dependencies
     dependencies: GraphTable, // dependencies is inversed required_by
@@ -136,15 +176,18 @@ pub struct EvaluatorTable {
 
 impl EvaluatorTable {
     pub fn new(source: SourceTable) -> Self {
-        let invalid_caches: HashSet<CellPos> = source.iter().map(|(pos, _)| *pos).collect();
+        let invalid_caches: HashSet<CellPos> = source.inner_iter().map(|(pos, _)| *pos).collect();
         Self {
-            source,
+            file: BightFile::new(source),
             invalid_caches,
             ..Default::default()
         }
     }
+    pub fn source_file(&self) -> &BightFile {
+        &self.file
+    }
     pub fn source_table(&self) -> &SourceTable {
-        &self.source
+        &self.file.source
     }
     pub fn set_source<S>(&mut self, pos: impl Into<CellPos>, src: Option<S>)
     where
@@ -157,17 +200,17 @@ impl EvaluatorTable {
         }
         match src {
             None => {
-                self.source.remove(&pos);
+                self.file.source.set(pos, None);
             }
             Some(s) => {
-                self.source.insert(pos, s.into());
+                self.file.source.set(pos, Some(s.into()));
             }
         };
     }
 
     pub fn get_source(&self, pos: impl Into<CellPos>) -> Option<&Arc<str>> {
         let pos = pos.into();
-        self.source.get(&pos)
+        self.file.source.get(pos)
     }
     fn invalidate_cell(&mut self, pos: impl Into<CellPos>) {
         let pos = pos.into();
@@ -219,8 +262,9 @@ impl EvaluatorTable {
             .iter()
             .map(|&pos| {
                 CellInfo::new(
-                    self.source
-                        .get(&pos)
+                    self.file
+                        .source
+                        .get(pos)
                         .expect("Only cells with source may be marked as invalid cache"),
                     pos,
                     &dep_tables,

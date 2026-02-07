@@ -2,7 +2,7 @@ use rkyv::{Archive, Deserialize, Serialize, access, deserialize, to_bytes, util:
 
 use crate::{evaluator::SourceTable, file::bight::DeserializationError};
 
-#[derive(Archive, Serialize, Deserialize)]
+#[derive(Archive, Serialize, Deserialize, Default, Debug)]
 pub struct BightFile {
     pub source: SourceTable,
 }

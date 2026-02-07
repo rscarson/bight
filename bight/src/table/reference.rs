@@ -24,7 +24,7 @@ impl<'a, T: Table + ?Sized> TableRef<'a, T> {
     pub fn pos(&self) -> CellPos {
         self.pos
     }
-    pub fn get(&self) -> Option<&'a T::Item> {
+    pub fn get_self(&self) -> Option<&'a T::Item> {
         self.table.get(self.pos)
     }
     pub fn offset(self, offset_x: isize, offset_y: isize) -> Self {
@@ -44,6 +44,13 @@ impl<'a, T: Table + ?Sized> TableRef<'a, T> {
     }
 }
 
+impl<'a, T: Table + ?Sized> Table for TableRef<'a, T> {
+    type Item = T::Item;
+    fn get(&self, pos: CellPos) -> Option<&'a Self::Item> {
+        self.table.get(self.pos + pos)
+    }
+}
+
 pub struct TableRefMut<'a, T: ?Sized> {
     table: &'a mut T,
     pos: CellPos,
@@ -55,7 +62,7 @@ impl<'a, T: TableMut + ?Sized> TableRefMut<'a, T> {
     pub fn pos(&self) -> CellPos {
         self.pos
     }
-    pub fn get(&'a self) -> Option<&'a T::Item> {
+    pub fn get_self(&'a self) -> Option<&'a T::Item> {
         self.table.get(self.pos)
     }
     pub fn offset_get(&'a self, offset_x: isize, offset_y: isize) -> Option<&'a T::Item> {
@@ -64,7 +71,7 @@ impl<'a, T: TableMut + ?Sized> TableRefMut<'a, T> {
         pos.y += offset_y;
         self.table.get(pos)
     }
-    pub fn get_mut(&'a mut self) -> Option<&'a mut T::Item> {
+    pub fn get_mut_self(&'a mut self) -> Option<&'a mut T::Item> {
         self.table.get_mut(self.pos)
     }
     pub fn offset(self, offset_x: isize, offset_y: isize) -> Self {
@@ -85,6 +92,22 @@ impl<'a, T: TableMut + ?Sized> TableRefMut<'a, T> {
         pos.x += offset_x;
         pos.y += offset_y;
         self.table.get_mut(pos)
+    }
+}
+impl<'a, T: Table + ?Sized> Table for TableRefMut<'a, T> {
+    type Item = T::Item;
+    fn get(&self, pos: CellPos) -> Option<&Self::Item> {
+        self.table.get(self.pos + pos)
+    }
+}
+
+impl<'a, T: TableMut + ?Sized> TableMut for TableRefMut<'a, T> {
+    fn get_mut(&mut self, pos: CellPos) -> Option<&mut Self::Item> {
+        self.table.get_mut(self.pos + pos)
+    }
+    fn set(&mut self, mut pos: CellPos, item: Option<Self::Item>) {
+        pos += self.pos;
+        self.table.set(pos, item);
     }
 }
 

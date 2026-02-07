@@ -29,6 +29,8 @@ mod lua;
 
 use std::fmt::Debug;
 use std::fmt::Display;
+use std::ops::Add;
+use std::ops::AddAssign;
 use std::str::FromStr;
 
 use rkyv::{Archive, Deserialize, Serialize};
@@ -52,6 +54,21 @@ impl From<(isize, isize)> for CellPos {
             x: value.0,
             y: value.1,
         }
+    }
+}
+
+impl AddAssign for CellPos {
+    fn add_assign(&mut self, rhs: Self) {
+        self.x += rhs.x;
+        self.y = rhs.y;
+    }
+}
+
+impl Add for CellPos {
+    type Output = Self;
+    fn add(mut self, rhs: Self) -> Self::Output {
+        self += rhs;
+        self
     }
 }
 
