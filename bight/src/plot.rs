@@ -322,6 +322,10 @@ pub fn plot(
                 data.plot(&mut chart, DrawType::Points, style)?;
                 lin_data.plot(&mut chart, DrawType::Segments, style)?;
 
+                let mut buffer_a = ryu::Buffer::new();
+                let a = buffer_a.format(a);
+                let mut buffer_b = ryu::Buffer::new();
+                let b = buffer_b.format(b);
                 output.push(format!("y = {a} * x + {b}"));
             }
             PlotType::Curve => {
