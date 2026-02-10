@@ -14,6 +14,11 @@ use crate::table::{Table, TableSlice};
 use plotters::{coord::types::RangedCoordf64, prelude::*, style::full_palette::PURPLE};
 use polyfit::{ChebyshevFit, MonomialFit, score, statistics::DegreeBound};
 
+/// Describes how the limits of a plot axis should be calculated
+/// - MinMax: the limits for the axis is lowest and highest coordinate of the data points
+/// - MinMaxOrZero: the limits for the axis is lowest and highest coordinate of the data points,
+///   but a bound is chanded to 0.0 if it's positive (for lower bound) or negative (for upper bound)
+/// - Custom: a custom range
 #[derive(Default, Clone, Debug)]
 pub enum PlotLimits {
     #[default]
@@ -22,6 +27,7 @@ pub enum PlotLimits {
     Custom(Range<f64>),
 }
 
+/// General options for plotting that are shared betwwen all data sets.
 #[derive(Debug)]
 pub struct PlotOptions {
     pub limits_x: PlotLimits,
@@ -30,6 +36,8 @@ pub struct PlotOptions {
     pub label_x: String,
     pub label_y: String,
     pub size: (u32, u32),
+    /// The number of points that will be used for plotting curve or line approximations. The
+    /// default is 100.
     pub approx_points: NonZero<u64>,
 }
 
@@ -52,16 +60,21 @@ impl Default for PlotOptions {
         }
     }
 }
-
+/// Describes how the data should be plotted
 #[derive(Default, Clone, Copy)]
 pub enum PlotType {
     #[default]
+    /// Plots each individual point
     Scatter,
+    /// Plots each individual point and connects them with segments
     Segments,
+    /// Plots each individual point and their linear approximation
     Linear,
+    /// Plots each individual point and their curve approximation
     Curve,
 }
 
+/// Describes what should be drawn
 #[derive(Default)]
 pub enum DrawType {
     #[default]
@@ -74,6 +87,7 @@ pub struct DataOptions {
     pub plot_type: DrawType,
 }
 
+/// The data for plotting. Can be either a dataset (a vector of points) or a function.
 pub enum PlotData {
     Points(Vec<(f64, f64)>),
     Function {
@@ -97,6 +111,7 @@ impl Debug for PlotData {
 }
 
 impl PlotData {
+    /// Draws the data on the given chart
     pub fn plot<DB, DE>(
         &self,
         chart: &mut FloatChartContext<'_, DB>,
@@ -121,6 +136,8 @@ impl PlotData {
         }
         Ok(())
     }
+
+    /// Returns an iterator over the poins that will be plotted
     pub fn point_iter(&self) -> Box<dyn Iterator<Item = (f64, f64)> + '_> {
         let iter: Box<dyn Iterator<Item = (f64, f64)> + '_> = match self {
             PlotData::Points(data) => Box::new(data.iter().copied()),
@@ -139,6 +156,7 @@ impl PlotData {
         iter
     }
 
+    /// Returns a vector of points that will be plotted
     pub fn owned_data(&self) -> Vec<(f64, f64)> {
         match self {
             PlotData::Points(data) => data.clone(),
@@ -150,6 +168,7 @@ impl PlotData {
         }
     }
 
+    /// Finds the maximum and minimum x coordinates of the points
     pub fn x_range(&self) -> Option<Range<f64>> {
         match self {
             Self::Points(data) => {
@@ -188,6 +207,7 @@ impl PlotData {
         }
     }
 
+    /// Finds the maximum and minimum y coordinates of the points
     pub fn y_range(&self) -> Option<Range<f64>> {
         let mut data = self.point_iter();
         let (_, mut y_min) = data.next()?;
