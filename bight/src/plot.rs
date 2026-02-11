@@ -286,6 +286,7 @@ impl PlotData {
     }
 }
 
+/// The location and type in which the plot will be saved (currently only bitmap is supported)
 pub enum PlotOutput {
     BitMapFile(PathBuf),
 }
@@ -304,6 +305,10 @@ pub enum PlotError<DE: Error + Send + Sync> {
 
 const PLOT_COLORS: [RGBColor; 5] = [BLUE, RED, BLACK, GREEN, PURPLE];
 
+/// Plots each series from `data` with the corresponding (by index) plot type and the shared
+/// options. If the length of
+/// plot_types is less that length of data, the data without the type is not plotted. Saves the
+/// plot to `output`.
 pub fn plot(
     mut data: Vec<PlotData>,
     plot_types: Vec<PlotType>,
