@@ -4,11 +4,15 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+/// The trait that any clipboard provider must implement
 pub trait ClipboardProvider {
+    /// Set the contents of the clipboard to the given string slice
     fn set_str(&mut self, v: &str);
+    /// Get the contents of the clipboard
     fn get_str(&mut self) -> Option<String>;
 }
 
+/// The system clipboard provider using arboard crate
 pub struct ArboardProvider {
     inner: Mutex<arboard::Clipboard>,
 }
@@ -26,6 +30,8 @@ impl ClipboardProvider for ArboardProvider {
     }
 }
 
+/// Dynamically dispatched clipboard, that avoids doubling the data copied by it by returning an
+/// Arc<str>
 pub struct Clipboard {
     copied_val: Option<(Arc<str>, u64)>,
     inner: Box<dyn ClipboardProvider + Send + Sync>,
