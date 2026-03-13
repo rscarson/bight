@@ -1,6 +1,10 @@
+//! TUI frontend for bight spreadsheet engine
+
 use std::io::{Write, stdout};
 
-use bight::{
+use bight::table::slice::table::TableSlice;
+
+use bight_tui::{
     app::AppState,
     callback::{EditorStateCallback, OnKeyEventCallback as CB},
     editor::{
@@ -13,7 +17,6 @@ use bight::{
         },
     },
     key::Key,
-    table::slice::table::TableSlice,
     term::view::{DrawRect, editor},
 };
 use crossterm::terminal::{self, ClearType};

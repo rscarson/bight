@@ -1,6 +1,6 @@
-//! `bight` is an Excel-like spreadsheet engine and editor. It can be used as a standalone TUI editor
-//! (WIP, many features are missing), a [neovim plugin](https://github.com/WASDetchan/bight.nvim),
-//! or as a library.
+//! `bight` is an Excel-like spreadsheet engine.
+//! It has a standalone TUI editor (bight_tui in this repository) (mainly for quick testing, many features are missing),
+//! and a [neovim plugin](https://github.com/WASDetchan/bight.nvim) (the recommended way to use),
 //!
 //! Bight defines Table traits and data types to work with tables in an abstract
 //! way (see the [`table`] module). Using those traits, bight implements an
@@ -13,16 +13,11 @@
 //! cells may be exported as csv (see the [`mod@file`] module). Bight also provides some simple terminal (including keybindings) and clipboard
 //! abstrations.
 
-pub mod app;
-pub mod callback;
 pub mod clipboard;
-pub mod editor;
 pub mod evaluator;
 pub mod file;
-pub mod key;
 pub mod plot;
 pub mod table;
-pub mod term;
 
 #[cfg(test)]
 pub mod test_util;

@@ -4,11 +4,14 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::{
     callback::{AppStateCallback, EditorStateCallback},
-    clipboard::{get_clipboard, set_clipboard},
     editor::mode::Mode,
+    key::sequence::parse_key_sequence,
+};
+
+use bight::{
+    clipboard::{get_clipboard, set_clipboard},
     evaluator::EvaluatorTable,
     file::{self, BightFile},
-    key::sequence::parse_key_sequence,
 };
 
 use super::EditorBindings;

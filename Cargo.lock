@@ -136,14 +136,11 @@ checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
 
 [[package]]
 name = "bight"
-version = "0.1.4-b"
+version = "0.1.5"
 dependencies = [
  "arboard",
  "bon",
- "crossterm",
  "csv",
- "edit",
- "env_logger",
  "futures",
  "hashbrown 0.15.5",
  "log",
@@ -167,6 +164,29 @@ dependencies = [
  "lsp-server",
  "lsp-types",
  "serde_json",
+]
+
+[[package]]
+name = "bight_tui"
+version = "0.1.5"
+dependencies = [
+ "arboard",
+ "bight",
+ "crossterm",
+ "csv",
+ "edit",
+ "env_logger",
+ "futures",
+ "hashbrown 0.15.5",
+ "log",
+ "mlua",
+ "plotters",
+ "polyfit",
+ "rkyv",
+ "ryu",
+ "tempfile",
+ "thiserror 2.0.17",
+ "tokio",
 ]
 
 [[package]]

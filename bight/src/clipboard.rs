@@ -30,8 +30,7 @@ impl ClipboardProvider for ArboardProvider {
     }
 }
 
-/// Dynamically dispatched clipboard, that avoids doubling the data copied by it by returning an
-/// Arc<str>
+/// Dynamically dispatched clipboard, that avoids doubling the data copied by it by returning an `Arc<str>`
 pub struct Clipboard {
     copied_val: Option<(Arc<str>, u64)>,
     inner: Box<dyn ClipboardProvider + Send + Sync>,

@@ -2,7 +2,7 @@ pub mod table {
 
     use crossterm::{cursor::MoveTo, queue, style::Print};
 
-    use crate::{
+    use bight::{
         evaluator::EvaluatorTable,
         table::{cell::CellPos, slice::table::TableSlice},
     };
@@ -93,11 +93,11 @@ pub mod editor {
 
     use crossterm::{cursor::MoveTo, queue, style::Print};
 
+    use bight::{evaluator::EvaluatorTable, table::slice::table::TableSlice};
+
     use crate::{
         editor::{EditorState, display_sequence},
-        evaluator::EvaluatorTable,
         key::Key,
-        table::slice::table::TableSlice,
     };
 
     use super::{DrawRect, table};

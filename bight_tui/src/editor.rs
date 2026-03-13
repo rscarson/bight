@@ -1,10 +1,11 @@
 pub mod bindings;
 pub mod mode;
 
-use crate::{
+use crate::key::Key;
+
+use bight::{
     clipboard::{Clipboard, ClipboardProvider},
     evaluator::EvaluatorTable,
-    key::Key,
     table::cell::CellPos,
 };
 use mode::Mode;
