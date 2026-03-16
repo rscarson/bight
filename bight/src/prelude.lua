@@ -3,7 +3,7 @@ function REL(deltaX, deltaY)
 end
 
 function RELX(deltaX)
-  return REL(0, deltaX)
+  return REL(deltaX, 0)
 end
 
 function RELY(deltaY)

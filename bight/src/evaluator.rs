@@ -23,7 +23,9 @@ use crate::{
 };
 
 /// The type representing an error that occured during evaluation. Can be caused either by an error
-/// that was raised in the code of the cell being evaluated, or by a dependency cycle.
+/// that was raised in the code of the cell being evaluated, or by a dependency cycle.  
+///
+/// PartialEq is implemented for this type, but will always return false
 #[derive(Debug, thiserror::Error, Clone)]
 pub enum TableError {
     /// A lua error was raised during the evaluation
@@ -33,7 +35,14 @@ pub enum TableError {
     #[error(transparent)]
     OtherError(Arc<dyn Error + Send + Sync>),
 }
-#[derive(Debug, Clone)]
+
+impl PartialEq for TableError {
+    fn eq(&self, _other: &Self) -> bool {
+        false
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 /// The value that the sourcewas evaluated to. Note that error during evaluation is also considered
 /// a value, and it will be propagated into any cell that depend on the cell that raised the error
 /// (The [`mlua::IntoLua`] implementation for [`TableValue::Err`] returns a lua error)
@@ -121,7 +130,9 @@ impl TryFrom<TableValue> for f64 {
     }
 }
 
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Debug, Default, Clone)]
+#[derive(
+    rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Debug, Default, Clone, PartialEq, Eq,
+)]
 pub struct SourceTable {
     inner: HashTable<Arc<str>>,
 }
@@ -165,7 +176,7 @@ pub type ValueTable = HashTable<TableValue>;
 pub type DependencyChannelTable = HashTable<Vec<oneshot::Sender<TableValue>>>;
 pub type GraphTable = HashTable<HashSet<CellPos>>;
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, PartialEq)]
 pub struct EvaluatorTable {
     file: BightFile,
     result: ValueTable,

@@ -73,9 +73,9 @@ impl mlua::FromLuaMulti for CellPos {
 
 impl mlua::UserData for CellPos {
     fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("val", |lua, this, ()| {
+        methods.add_async_method("val", |lua, this, ()| async move {
             let get_fn: mlua::Function = lua.globals().get("GET")?;
-            get_fn.call::<mlua::Value>((this.x, this.y))
+            get_fn.call_async::<mlua::Value>((this.x, this.y)).await
         });
 
         methods.add_meta_method("__index", |lua, &this, val: String| {

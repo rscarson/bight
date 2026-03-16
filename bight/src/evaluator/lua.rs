@@ -79,10 +79,12 @@ pub async fn evaluate<'a>(source: &str, info: &'a CellInfo<'a>) -> TableValue {
 
 impl FromLua for TableValue {
     fn from_lua(value: mlua::Value, _lua: &Lua) -> mlua::Result<Self> {
-        use mlua::Value::{Integer, Number};
+        use mlua::Value::{Error, Integer, Nil, Number};
         match value {
+            Nil => Ok(TableValue::Empty),
             Number(n) => Ok(TableValue::Number(n)),
             Integer(n) => Ok(TableValue::Number(n as f64)),
+            Error(e) => Ok(TableValue::lua_error(*e)),
             _ => match value.to_string() {
                 Ok(s) => Ok(TableValue::from_text(s)),
                 Err(e) => Ok(TableValue::lua_error(e)),
@@ -96,9 +98,11 @@ impl IntoLua for TableValue {
         match self {
             Self::Empty => mlua::Nil.into_lua(lua),
             Self::Text(s) => s.to_string().into_lua(lua),
-            Self::Err(TableError::LuaError(le)) => le.as_ref().to_owned().into_lua(lua),
             Self::Number(value) => Ok(value.into_lua(lua).expect("Failed to conver f64 to lua")),
-            Self::Err(e) => e.to_string().into_lua(lua),
+            Self::Err(e) => match e {
+                TableError::LuaError(e) => Err((*e).clone()),
+                TableError::OtherError(e) => Err(mlua::Error::ExternalError(e.clone())),
+            },
         }
     }
 }
