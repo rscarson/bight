@@ -9,7 +9,6 @@ use crate::{
 };
 
 use bight::{
-    clipboard::{get_clipboard, set_clipboard},
     evaluator::EvaluatorTable,
     file::{self, BightFile},
 };
@@ -55,7 +54,7 @@ pub fn add_clipboard_binding(bindings: &mut EditorBindings) {
                 } else {
                     Arc::from("")
                 };
-                set_clipboard(v);
+                state.clipboard.set(v);
             }),
         )
         .unwrap();
@@ -65,7 +64,7 @@ pub fn add_clipboard_binding(bindings: &mut EditorBindings) {
             "p",
             EditorStateCallback::new(|state| {
                 let pos = state.cursor;
-                if let Some(v) = get_clipboard() {
+                if let Some(v) = state.clipboard.get() {
                     state.table.set_source(pos, Some(v));
                 }
             }),

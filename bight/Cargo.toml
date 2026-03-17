@@ -1,6 +1,6 @@
 [package]
 name = "bight"
-version = "0.1.5-b"
+version = "0.1.6-a"
 edition = "2024"
 authors = [
   "WASDetchan",
@@ -9,13 +9,17 @@ license = "MIT"
 description = "A spreadsheed engine and editor"
 repository = "https://github.com/WASDetchan/bight"
 
+[features]
+multi-thread = ["tokio/rt-multi-thread", "mlua/send"]
+clipboard = ["dep:arboard"]
+
 [dependencies]
+log = "0.4.29"
 thiserror = "2.0"
-tokio = {version = "1.48", features = ["full"]}
+tokio = {version = "1.50", features = ["rt", "sync"]}
 futures = "0.3"
-mlua = { version = "0.11.5", features = ["async", "luajit", "send"] }
-log = "0.4.28"
-arboard = {version = "3.6", features = ["wayland-data-control"]}
+mlua = { version = "0.11.6", features = ["async", "luajit"] }
+arboard = {version = "3.6", features = ["wayland-data-control"], optional = true}
 hashbrown = "0.15.5"
 rkyv = { version = "0.8.12", features = ["bytecheck", "hashbrown-0_15"] }
 csv = "1.4.0"

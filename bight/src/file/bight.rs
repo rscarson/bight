@@ -1,5 +1,5 @@
 mod v1;
-use std::{path::Path, sync::Arc};
+use std::path::Path;
 
 use rkyv::{Archive, Deserialize, Serialize, access};
 pub use v1::BightFile;
@@ -7,6 +7,7 @@ use v1::BightFile as BightFileV1;
 
 use crate::{
     file::{DeserializationError, FileLoadError},
+    sync::Rc,
     table::{TableMut, TableRefMut},
 };
 
@@ -67,7 +68,7 @@ pub fn load(path: &Path) -> Result<BightFile, FileLoadError> {
     Ok(from_bytes(&bytes)?)
 }
 
-pub fn load_into<T: TableMut<Item: From<Arc<str>>> + ?Sized>(
+pub fn load_into<T: TableMut<Item: From<Rc<str>>> + ?Sized>(
     path: &Path,
     mut table: TableRefMut<'_, T>,
 ) -> Result<(), FileLoadError> {

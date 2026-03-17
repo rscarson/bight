@@ -13,11 +13,14 @@
 //! cells may be exported as csv (see the [`mod@file`] module). Bight also provides some simple terminal (including keybindings) and clipboard
 //! abstrations.
 
-pub mod clipboard;
 pub mod evaluator;
 pub mod file;
 pub mod plot;
+pub mod sync;
 pub mod table;
+
+#[cfg(feature = "clipboard")]
+pub mod clipboard;
 
 #[cfg(test)]
 pub mod test_util;

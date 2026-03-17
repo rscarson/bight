@@ -1,8 +1,10 @@
 use std::{
     fmt::Debug,
     hash::{self, DefaultHasher, Hash, Hasher},
-    sync::{Arc, Mutex},
+    sync::Mutex,
 };
+
+use crate::sync::Rc;
 
 /// The trait that any clipboard provider must implement
 pub trait ClipboardProvider {
@@ -30,9 +32,9 @@ impl ClipboardProvider for ArboardProvider {
     }
 }
 
-/// Dynamically dispatched clipboard, that avoids doubling the data copied by it by returning an `Arc<str>`
+/// Dynamically dispatched clipboard, that avoids doubling the data copied by it by returning an `Rc<str>`
 pub struct Clipboard {
-    copied_val: Option<(Arc<str>, u64)>,
+    copied_val: Option<(Rc<str>, u64)>,
     inner: Box<dyn ClipboardProvider + Send + Sync>,
 }
 
@@ -65,7 +67,7 @@ impl Clipboard {
     pub fn new() -> Self {
         Self::default()
     }
-    pub fn set(&mut self, v: Arc<str>) {
+    pub fn set(&mut self, v: Rc<str>) {
         let hash = {
             let mut hasher: hash::DefaultHasher = DefaultHasher::new();
             v.hash(&mut hasher);
@@ -74,7 +76,7 @@ impl Clipboard {
         self.inner.set_str(&v);
         self.copied_val = Some((v, hash));
     }
-    pub fn get(&mut self) -> Option<Arc<str>> {
+    pub fn get(&mut self) -> Option<Rc<str>> {
         let cb_text = self.inner.get_str()?;
         let cb_hash = {
             let mut hasher: hash::DefaultHasher = DefaultHasher::new();
@@ -87,29 +89,11 @@ impl Clipboard {
         {
             Some(copied.clone())
         } else {
-            let text: Arc<str> = cb_text.into();
+            let text: Rc<str> = cb_text.into();
             self.copied_val = Some((text.clone(), cb_hash));
             Some(text)
         }
     }
-}
-
-static CLIPBOARD: Mutex<Option<Clipboard>> = Mutex::new(None);
-
-pub fn get_clipboard() -> Option<Arc<str>> {
-    let mut guard = CLIPBOARD.lock().unwrap();
-    if guard.is_none() {
-        *guard = Some(Clipboard::new());
-    }
-    guard.as_mut().unwrap().get()
-}
-
-pub fn set_clipboard(v: Arc<str>) {
-    let mut guard = CLIPBOARD.lock().unwrap();
-    if guard.is_none() {
-        *guard = Some(Clipboard::new());
-    }
-    guard.as_mut().unwrap().set(v)
 }
 
 #[cfg(test)]
@@ -117,8 +101,9 @@ mod test {
     use super::*;
     #[test]
     fn it_works() {
+        let mut clipboard = Clipboard::new();
         let text: &'static str = "Some text";
-        set_clipboard(Arc::from(text));
-        assert_eq!(get_clipboard().unwrap().as_ref(), text);
+        clipboard.set(Rc::from(text));
+        assert_eq!(clipboard.get().unwrap().as_ref(), text);
     }
 }

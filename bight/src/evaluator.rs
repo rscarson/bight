@@ -10,7 +10,7 @@
 pub mod interaction;
 pub mod lua;
 
-use std::{collections::HashSet, error::Error, fmt::Display, sync::Arc};
+use std::{collections::HashSet, fmt::Display, sync::Arc};
 
 use futures::future::join_all;
 use hashbrown::hash_map;
@@ -19,6 +19,8 @@ use tokio::sync::{Mutex, RwLock, RwLockWriteGuard, oneshot};
 use crate::{
     evaluator::interaction::CellInfo,
     file::BightFile,
+    sync,
+    sync::Rc,
     table::{HashTable, Table, TableMut, cell::CellPos},
 };
 
@@ -30,10 +32,10 @@ use crate::{
 pub enum TableError {
     /// A lua error was raised during the evaluation
     #[error(transparent)]
-    LuaError(Arc<mlua::Error>),
+    LuaError(Rc<mlua::Error>),
     /// Non-lua error raised during the evaluation
     #[error(transparent)]
-    OtherError(Arc<dyn Error + Send + Sync>),
+    OtherError(std::sync::Arc<dyn sync::StdError>),
 }
 
 impl PartialEq for TableError {
@@ -51,7 +53,7 @@ pub enum TableValue {
     /// returned nil
     Empty,
     /// Value of a non-formula cell or a cell with a formula that returned a string
-    Text(Arc<str>), // Using Arc<str> instead of String as TableValue is never mutated, but cloning happens often
+    Text(Rc<str>), // Using Rc<str> (or Arc with feature `multi-thread`) instead of String as TableValue is never mutated, but cloning happens often
     /// Value of a cell a formula in which returned a number (float or integer)
     Number(f64),
     /// An error occured during the evaluation
@@ -79,12 +81,12 @@ impl From<Result<TableValue, EvaluationError>> for TableValue {
 
 impl TableValue {
     /// Shorthand for creating a non-lua error table value
-    pub fn other_error(error: impl Error + Send + Sync + 'static) -> Self {
+    pub fn other_error(error: impl sync::StdError + 'static) -> Self {
         Self::Err(TableError::OtherError(Arc::new(error)))
     }
     /// Shorthand for creating a lua error table value
     pub fn lua_error(error: mlua::Error) -> Self {
-        Self::Err(TableError::LuaError(Arc::new(error)))
+        Self::Err(TableError::LuaError(Rc::new(error)))
     }
     pub fn is_err(&self) -> bool {
         matches!(self, Self::Err(_))
@@ -134,26 +136,26 @@ impl TryFrom<TableValue> for f64 {
     rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Debug, Default, Clone, PartialEq, Eq,
 )]
 pub struct SourceTable {
-    inner: HashTable<Arc<str>>,
+    inner: HashTable<Rc<str>>,
 }
 
 impl SourceTable {
-    pub fn inner_iter(&self) -> hash_map::Iter<'_, CellPos, Arc<str>> {
+    pub fn inner_iter(&self) -> hash_map::Iter<'_, CellPos, Rc<str>> {
         self.inner.iter()
     }
-    pub fn into_inner_iter(self) -> hash_map::IntoIter<CellPos, Arc<str>> {
+    pub fn into_inner_iter(self) -> hash_map::IntoIter<CellPos, Rc<str>> {
         self.inner.into_iter()
     }
     pub fn new() -> Self {
         Self::default()
     }
-    pub fn from_source(source: HashTable<Arc<str>>) -> Self {
+    pub fn from_source(source: HashTable<Rc<str>>) -> Self {
         Self { inner: source }
     }
 }
 
 impl Table for SourceTable {
-    type Item = Arc<str>;
+    type Item = Rc<str>;
     fn get(&self, pos: CellPos) -> Option<&Self::Item> {
         self.inner.get(&pos)
     }
@@ -202,7 +204,7 @@ impl EvaluatorTable {
     }
     pub fn set_source<S>(&mut self, pos: impl Into<CellPos>, src: Option<S>)
     where
-        Arc<str>: From<S>,
+        Rc<str>: From<S>,
     {
         let pos = pos.into();
         match &src {
@@ -219,7 +221,7 @@ impl EvaluatorTable {
         };
     }
 
-    pub fn get_source(&self, pos: impl Into<CellPos>) -> Option<&Arc<str>> {
+    pub fn get_source(&self, pos: impl Into<CellPos>) -> Option<&Rc<str>> {
         let pos = pos.into();
         self.file.source.get(pos)
     }
@@ -311,11 +313,8 @@ impl EvaluatorTable {
                 )
             })
             .collect();
-        let rt = tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .build()
-            .unwrap();
-        rt.block_on(join_all(futures));
+
+        sync::new_runtime_and_block(join_all(futures));
 
         let dep_tables = dep_tables.into_inner();
         self.dependencies = dep_tables.0;
@@ -354,7 +353,7 @@ async fn evaluate<'a>(info: &'a CellInfo<'a>) -> TableValue {
         lua::evaluate(lua_source, info).await
     } else {
         let out = if source.starts_with('\\') {
-            Arc::<str>::from(source.split_at(1).1)
+            Rc::<str>::from(source.split_at(1).1)
         } else {
             source.clone()
         };

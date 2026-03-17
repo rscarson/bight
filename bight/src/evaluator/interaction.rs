@@ -1,5 +1,5 @@
+use crate::sync::Rc;
 use hashbrown::HashMap;
-use std::sync::Arc;
 
 use tokio::sync::Mutex;
 
@@ -11,7 +11,7 @@ use crate::{
 use super::{CacheTable, GraphTable};
 #[derive(Debug)]
 pub struct CellInfo<'a> {
-    source: &'a Arc<str>,
+    source: &'a Rc<str>,
     pos: CellPos,
     dep_tables: &'a Mutex<(GraphTable, GraphTable)>,
     cache_table: &'a CacheTable,
@@ -20,7 +20,7 @@ pub struct CellInfo<'a> {
 
 impl<'a> CellInfo<'a> {
     pub fn new(
-        source: &'a Arc<str>,
+        source: &'a Rc<str>,
         pos: CellPos,
         dep_tables: &'a Mutex<(GraphTable, GraphTable)>,
         cache_table: &'a CacheTable,
@@ -37,7 +37,7 @@ impl<'a> CellInfo<'a> {
     pub fn pos(&self) -> CellPos {
         self.pos
     }
-    pub fn source(&self) -> &Arc<str> {
+    pub fn source(&self) -> &Rc<str> {
         self.source
     }
     pub async fn get(&self, req: CellPos) -> Result<TableValue, EvaluationError> {

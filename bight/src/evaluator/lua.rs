@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, pin::Pin, sync::Arc};
+use std::{marker::PhantomData, pin::Pin};
 
 use mlua::{FromLua, FromLuaMulti, IntoLua, IntoLuaMulti, Lua};
 
@@ -7,7 +7,14 @@ use crate::{
     table::cell::CellPos,
 };
 
+#[cfg(not(feature = "multi-thread"))]
+type TableLuaBoxFuture<'a, V> = Pin<Box<dyn Future<Output = mlua::Result<V>> + 'a>>;
+#[cfg(not(feature = "multi-thread"))]
+type TableBoxFn<'a, T, V> = Box<dyn Fn(Lua, T) -> TableLuaBoxFuture<'a, V> + 'a>;
+
+#[cfg(feature = "multi-thread")]
 type TableLuaBoxFuture<'a, V> = Pin<Box<dyn Future<Output = mlua::Result<V>> + Send + Sync + 'a>>;
+#[cfg(feature = "multi-thread")]
 type TableBoxFn<'a, T, V> = Box<dyn Fn(Lua, T) -> TableLuaBoxFuture<'a, V> + Send + Sync + 'a>;
 
 fn get<'a>(info: &'a CellInfo<'a>) -> TableBoxFn<'a, CellPos, TableValue> {
@@ -74,7 +81,7 @@ pub async fn evaluate<'a>(source: &str, info: &'a CellInfo<'a>) -> TableValue {
 
     let res = ev.evaluate(source).await;
 
-    res.unwrap_or_else(|err| TableValue::Err(TableError::LuaError(Arc::new(err))))
+    res.unwrap_or_else(TableValue::lua_error)
 }
 
 impl FromLua for TableValue {
@@ -101,7 +108,7 @@ impl IntoLua for TableValue {
             Self::Number(value) => Ok(value.into_lua(lua).expect("Failed to conver f64 to lua")),
             Self::Err(e) => match e {
                 TableError::LuaError(e) => Err((*e).clone()),
-                TableError::OtherError(e) => Err(mlua::Error::ExternalError(e.clone())),
+                TableError::OtherError(e) => Err(mlua::Error::ExternalError(e)),
             },
         }
     }

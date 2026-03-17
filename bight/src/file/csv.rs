@@ -1,8 +1,9 @@
-use std::{fmt::Display, io::Write, path::Path, sync::Arc};
+use std::{fmt::Display, io::Write, path::Path};
 
 use crate::{
     evaluator::SourceTable,
     file::{BightFile, DeserializationError, FileLoadError},
+    sync::Rc,
     table::{CellPos, Table, TableMut, TableRefMut, slice::table::TableSlice},
 };
 
@@ -49,7 +50,7 @@ pub fn from_bytes(bytes: &[u8]) -> Result<BightFile, DeserializationError> {
                 .enumerate()
                 .map(move |(posx, value)| {
                     let pos = CellPos::from((posx as isize, posy as isize));
-                    (pos, Arc::from(value))
+                    (pos, Rc::from(value))
                 })
                 .collect::<Vec<_>>())
         })
@@ -74,7 +75,7 @@ pub fn load(path: &Path) -> Result<BightFile, FileLoadError> {
     Ok(from_bytes(&bytes)?)
 }
 
-pub fn load_into<T: TableMut<Item: From<Arc<str>>> + ?Sized>(
+pub fn load_into<T: TableMut<Item: From<Rc<str>>> + ?Sized>(
     path: &Path,
     mut table: TableRefMut<'_, T>,
 ) -> Result<(), FileLoadError> {
