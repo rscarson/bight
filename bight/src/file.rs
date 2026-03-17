@@ -11,7 +11,7 @@ pub use bight::{load as load_bight, load_into as load_bight_into, save as save_b
 pub use csv::slice_to_csv_string;
 pub use csv::{load as load_csv, load_into as load_csv_into};
 
-use crate::sync::Rc;
+use crate::sync::RcStr;
 use std::path::Path;
 
 use crate::table::{TableMut, TableRefMut};
@@ -79,7 +79,7 @@ pub fn load(path: &Path) -> Result<BightFile, FileLoadError> {
 ///
 /// # Panincs
 /// This function panics if the provided TableMut implementation panics
-pub fn load_into<T: TableMut<Item: From<Rc<str>>> + ?Sized>(
+pub fn load_into<T: TableMut<Item: From<RcStr>> + ?Sized>(
     path: &Path,
     mut table: TableRefMut<'_, T>,
 ) -> Result<(), FileLoadError> {

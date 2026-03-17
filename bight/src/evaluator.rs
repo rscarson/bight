@@ -19,8 +19,7 @@ use tokio::sync::{Mutex, RwLock, RwLockWriteGuard, oneshot};
 use crate::{
     evaluator::interaction::CellInfo,
     file::BightFile,
-    sync,
-    sync::Rc,
+    sync::{self, Rc, RcStr},
     table::{HashTable, Table, TableMut, cell::CellPos},
 };
 
@@ -53,7 +52,7 @@ pub enum TableValue {
     /// returned nil
     Empty,
     /// Value of a non-formula cell or a cell with a formula that returned a string
-    Text(Rc<str>), // Using Rc<str> (or Arc with feature `multi-thread`) instead of String as TableValue is never mutated, but cloning happens often
+    Text(RcStr), // Using Rc<str> (or Arc with feature `multi-thread`) instead of String as TableValue is never mutated, but cloning happens often
     /// Value of a cell a formula in which returned a number (float or integer)
     Number(f64),
     /// An error occured during the evaluation
@@ -136,26 +135,26 @@ impl TryFrom<TableValue> for f64 {
     rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Debug, Default, Clone, PartialEq, Eq,
 )]
 pub struct SourceTable {
-    inner: HashTable<Rc<str>>,
+    inner: HashTable<RcStr>,
 }
 
 impl SourceTable {
-    pub fn inner_iter(&self) -> hash_map::Iter<'_, CellPos, Rc<str>> {
+    pub fn inner_iter(&self) -> hash_map::Iter<'_, CellPos, RcStr> {
         self.inner.iter()
     }
-    pub fn into_inner_iter(self) -> hash_map::IntoIter<CellPos, Rc<str>> {
+    pub fn into_inner_iter(self) -> hash_map::IntoIter<CellPos, RcStr> {
         self.inner.into_iter()
     }
     pub fn new() -> Self {
         Self::default()
     }
-    pub fn from_source(source: HashTable<Rc<str>>) -> Self {
+    pub fn from_source(source: HashTable<RcStr>) -> Self {
         Self { inner: source }
     }
 }
 
 impl Table for SourceTable {
-    type Item = Rc<str>;
+    type Item = RcStr;
     fn get(&self, pos: CellPos) -> Option<&Self::Item> {
         self.inner.get(&pos)
     }
@@ -204,7 +203,7 @@ impl EvaluatorTable {
     }
     pub fn set_source<S>(&mut self, pos: impl Into<CellPos>, src: Option<S>)
     where
-        Rc<str>: From<S>,
+        RcStr: From<S>,
     {
         let pos = pos.into();
         match &src {
@@ -221,7 +220,7 @@ impl EvaluatorTable {
         };
     }
 
-    pub fn get_source(&self, pos: impl Into<CellPos>) -> Option<&Rc<str>> {
+    pub fn get_source(&self, pos: impl Into<CellPos>) -> Option<&RcStr> {
         let pos = pos.into();
         self.file.source.get(pos)
     }
@@ -353,7 +352,7 @@ async fn evaluate<'a>(info: &'a CellInfo<'a>) -> TableValue {
         lua::evaluate(lua_source, info).await
     } else {
         let out = if source.starts_with('\\') {
-            Rc::<str>::from(source.split_at(1).1)
+            RcStr::from(source.split_at(1).1)
         } else {
             source.clone()
         };

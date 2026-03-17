@@ -1,6 +1,6 @@
 [package]
 name = "bight_tui"
-version = "0.1.6-a"
+version = "0.1.7-a"
 edition = "2024"
 authors = [
   "WASDetchan",
@@ -10,7 +10,7 @@ description = "A TUI bight frontend"
 repository = "https://github.com/WASDetchan/bight"
 
 [dependencies]
-bight = {version = "0.1.6-a", path = "../bight", features = ["multi-thread", "clipboard"]}
+bight = {version = "0.1.7-a", path = "../bight", features = ["multi-thread", "system-clipboard"]}
 
 thiserror = "2.0"
 crossterm = {version ="0.29", features = ["event-stream"]}

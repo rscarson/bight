@@ -142,7 +142,7 @@ checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
 
 [[package]]
 name = "bight"
-version = "0.1.6-a"
+version = "0.1.7-a"
 dependencies = [
  "arboard",
  "bon",
@@ -174,7 +174,7 @@ dependencies = [
 
 [[package]]
 name = "bight_tui"
-version = "0.1.6-a"
+version = "0.1.7-a"
 dependencies = [
  "bight",
  "crossterm",

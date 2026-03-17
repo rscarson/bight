@@ -1,8 +1,10 @@
-#[cfg(feature = "multi-thread")]
+#[cfg(feature = "sync")]
 pub type Rc<T> = std::sync::Arc<T>;
 
-#[cfg(not(feature = "multi-thread"))]
+#[cfg(not(feature = "sync"))]
 pub type Rc<T> = std::rc::Rc<T>;
+
+pub type RcStr = Rc<str>;
 
 #[cfg(feature = "multi-thread")]
 pub fn new_runtime_and_block<F: Future>(future: F) -> F::Output {
@@ -25,12 +27,12 @@ pub fn new_runtime_and_block<F: Future>(future: F) -> F::Output {
     local.block_on(&rt, future)
 }
 
-#[cfg(feature = "multi-thread")]
+#[cfg(feature = "sync")]
 pub trait StdError: std::error::Error + Send + Sync {}
-#[cfg(feature = "multi-thread")]
+#[cfg(feature = "sync")]
 impl<T: std::error::Error + Send + Sync> StdError for T {}
 
-#[cfg(not(feature = "multi-thread"))]
+#[cfg(not(feature = "sync"))]
 pub trait StdError: std::error::Error {}
-#[cfg(not(feature = "multi-thread"))]
+#[cfg(not(feature = "sync"))]
 impl<T: std::error::Error> StdError for T {}

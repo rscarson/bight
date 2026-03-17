@@ -1,6 +1,6 @@
 [package]
 name = "bight"
-version = "0.1.6-a"
+version = "0.1.7-a"
 edition = "2024"
 authors = [
   "WASDetchan",
@@ -10,8 +10,9 @@ description = "A spreadsheed engine and editor"
 repository = "https://github.com/WASDetchan/bight"
 
 [features]
-multi-thread = ["tokio/rt-multi-thread", "mlua/send"]
-clipboard = ["dep:arboard"]
+multi-thread = ["tokio/rt-multi-thread", "mlua/send", "sync"]
+sync = ["mlua/error-send"]
+system-clipboard = ["dep:arboard"]
 
 [dependencies]
 log = "0.4.29"

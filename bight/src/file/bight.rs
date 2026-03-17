@@ -7,7 +7,7 @@ use v1::BightFile as BightFileV1;
 
 use crate::{
     file::{DeserializationError, FileLoadError},
-    sync::Rc,
+    sync::RcStr,
     table::{TableMut, TableRefMut},
 };
 
@@ -68,7 +68,7 @@ pub fn load(path: &Path) -> Result<BightFile, FileLoadError> {
     Ok(from_bytes(&bytes)?)
 }
 
-pub fn load_into<T: TableMut<Item: From<Rc<str>>> + ?Sized>(
+pub fn load_into<T: TableMut<Item: From<RcStr>> + ?Sized>(
     path: &Path,
     mut table: TableRefMut<'_, T>,
 ) -> Result<(), FileLoadError> {

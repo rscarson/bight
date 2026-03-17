@@ -19,7 +19,6 @@ pub mod plot;
 pub mod sync;
 pub mod table;
 
-#[cfg(feature = "clipboard")]
 pub mod clipboard;
 
 #[cfg(test)]
