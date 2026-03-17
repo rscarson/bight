@@ -1,6 +1,6 @@
 [package]
 name = "bight"
-version = "0.1.7-a"
+version = "0.1.8-a"
 edition = "2024"
 authors = [
   "WASDetchan",
@@ -13,6 +13,7 @@ repository = "https://github.com/WASDetchan/bight"
 multi-thread = ["tokio/rt-multi-thread", "mlua/send", "sync"]
 sync = ["mlua/error-send"]
 system-clipboard = ["dep:arboard"]
+plot = ["dep:plotters", "dep:polyfit", "dep:ryu"]
 
 [dependencies]
 log = "0.4.29"
@@ -24,10 +25,11 @@ arboard = {version = "3.6", features = ["wayland-data-control"], optional = true
 hashbrown = "0.15.5"
 rkyv = { version = "0.8.12", features = ["bytecheck", "hashbrown-0_15"] }
 csv = "1.4.0"
-plotters = "0.3.7"
-polyfit = "0.10.0"
-ryu = "1.0.23"
 bon = "3.8.1"
+
+ryu = { version = "1.0.23", optional = true }
+plotters = { version = "0.3.7", optional = true }
+polyfit = { version = "0.10", optional = true }
 
 [dev-dependencies]
 tempfile = "3.24.0"
