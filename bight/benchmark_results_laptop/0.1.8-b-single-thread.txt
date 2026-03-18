@@ -1,0 +1,15 @@
+$ cargo +nightly bench -p bight
+     Running benches/evaluator.rs (target/release/deps/evaluator-6f2c502d7553ff45)
+
+running 9 tests
+test big_coord_formulas_large   ... bench: 374,556,995.10 ns/iter (+/- 2,750,183.27)
+test chained_formulas_large     ... bench: 373,619,448.10 ns/iter (+/- 2,268,211.16)
+test dep_cycle_formulas_large   ... bench: 424,213,530.10 ns/iter (+/- 5,972,262.75)
+test independent_formulas_large ... bench: 324,145,822.30 ns/iter (+/- 7,098,494.67)
+test one_formula                ... bench:     328,501.67 ns/iter (+/- 16,893.15)
+test one_string                 ... bench:       9,642.97 ns/iter (+/- 547.85)
+test same_formula_large         ... bench: 327,464,495.30 ns/iter (+/- 9,506,506.52)
+test same_string_large          ... bench:     872,965.50 ns/iter (+/- 87,343.21)
+test strings_large              ... bench:     867,113.61 ns/iter (+/- 43,746.61)
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 9 measured; 0 filtered out; finished in 555.14s

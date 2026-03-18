@@ -224,7 +224,8 @@ impl EvaluatorTable {
         let pos = pos.into();
         self.file.source.get(pos)
     }
-    fn invalidate_cell(&mut self, pos: impl Into<CellPos>) {
+
+    pub fn invalidate_cell(&mut self, pos: impl Into<CellPos>) {
         let pos = pos.into();
         if !self.invalid_caches.contains(&pos) {
             self.result.remove(&pos);
@@ -248,6 +249,15 @@ impl EvaluatorTable {
         }
 
         log::trace!("Invalidated cell {}", pos);
+    }
+
+    pub fn invalidate_all_cells(&mut self) {
+        for (&pos, _) in self.result.iter() {
+            self.invalid_caches.insert(pos);
+        }
+        self.result.clear();
+        self.required_by.clear();
+        self.dependencies.clear();
     }
 
     fn remove_cell(&mut self, pos: impl Into<CellPos>) {
