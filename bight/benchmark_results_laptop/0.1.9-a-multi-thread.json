@@ -1,0 +1,12 @@
+{ "type": "suite", "event": "started", "test_count": 4 }
+{ "type": "test", "event": "started", "name": "evaluator::test::format_number" }
+{ "type": "test", "event": "started", "name": "evaluator::test::format_string" }
+{ "type": "test", "event": "started", "name": "file::csv::test::csv" }
+{ "type": "test", "event": "started", "name": "file::csv::test::cyrillic" }
+{ "type": "test", "name": "evaluator::test::format_number", "event": "ignored" }
+{ "type": "test", "name": "evaluator::test::format_string", "event": "ignored" }
+{ "type": "test", "name": "file::csv::test::csv", "event": "ignored" }
+{ "type": "test", "name": "file::csv::test::cyrillic", "event": "ignored" }
+{ "type": "suite", "event": "ok", "passed": 0, "failed": 0, "ignored": 4, "measured": 0, "filtered_out": 0, "exec_time": 0.0002512 }
+{ "type": "suite", "event": "started", "test_count": 9 }
+{ "type": "test", "event": "started", "name": "big_coord_formulas_large" }

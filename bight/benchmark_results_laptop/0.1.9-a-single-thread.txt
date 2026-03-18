@@ -1,0 +1,23 @@
+
+running 4 tests
+test evaluator::test::format_number ... ignored
+test evaluator::test::format_string ... ignored
+test file::csv::test::csv ... ignored
+test file::csv::test::cyrillic ... ignored
+
+test result: ok. 0 passed; 0 failed; 4 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 9 tests
+test big_coord_formulas_large   ... bench: 372,724,764.00 ns/iter (+/- 1,737,714.14)
+test chained_formulas_large     ... bench: 372,380,295.80 ns/iter (+/- 4,382,073.44)
+test dep_cycle_formulas_large   ... bench: 421,310,159.00 ns/iter (+/- 2,075,213.22)
+test independent_formulas_large ... bench: 320,575,957.40 ns/iter (+/- 4,263,169.83)
+test one_formula                ... bench:     320,490.45 ns/iter (+/- 19,730.40)
+test one_string                 ... bench:       1,343.17 ns/iter (+/- 79.96)
+test same_formula_large         ... bench: 320,773,443.20 ns/iter (+/- 2,203,018.01)
+test same_string_large          ... bench:     832,310.70 ns/iter (+/- 39,902.88)
+test strings_large              ... bench:     838,874.90 ns/iter (+/- 26,355.67)
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 9 measured; 0 filtered out; finished in 545.66s
+

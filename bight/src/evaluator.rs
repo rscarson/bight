@@ -12,7 +12,6 @@ pub mod lua;
 
 use std::{collections::HashSet, fmt::Display, sync::Arc};
 
-use futures::future::join_all;
 use hashbrown::hash_map;
 use tokio::sync::{Mutex, RwLock, RwLockWriteGuard, oneshot};
 
@@ -323,7 +322,7 @@ impl EvaluatorTable {
             })
             .collect();
 
-        sync::new_runtime_and_block(join_all(futures));
+        sync::block_on_all(futures);
 
         let dep_tables = dep_tables.into_inner();
         self.dependencies = dep_tables.0;

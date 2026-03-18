@@ -1,0 +1,30 @@
+{ "type": "suite", "event": "started", "test_count": 4 }
+{ "type": "test", "event": "started", "name": "evaluator::test::format_number" }
+{ "type": "test", "event": "started", "name": "evaluator::test::format_string" }
+{ "type": "test", "event": "started", "name": "file::csv::test::csv" }
+{ "type": "test", "event": "started", "name": "file::csv::test::cyrillic" }
+{ "type": "test", "name": "evaluator::test::format_number", "event": "ignored" }
+{ "type": "test", "name": "evaluator::test::format_string", "event": "ignored" }
+{ "type": "test", "name": "file::csv::test::csv", "event": "ignored" }
+{ "type": "test", "name": "file::csv::test::cyrillic", "event": "ignored" }
+{ "type": "suite", "event": "ok", "passed": 0, "failed": 0, "ignored": 4, "measured": 0, "filtered_out": 0, "exec_time": 0.000224676 }
+{ "type": "suite", "event": "started", "test_count": 9 }
+{ "type": "test", "event": "started", "name": "big_coord_formulas_large" }
+{ "type": "bench", "name": "big_coord_formulas_large", "median": 373451857.4, "deviation": 3465424.3400000334 }
+{ "type": "test", "event": "started", "name": "chained_formulas_large" }
+{ "type": "bench", "name": "chained_formulas_large", "median": 372398529.20000005, "deviation": 3750546.6099999547 }
+{ "type": "test", "event": "started", "name": "dep_cycle_formulas_large" }
+{ "type": "bench", "name": "dep_cycle_formulas_large", "median": 420827617.6, "deviation": 2144245.569999993 }
+{ "type": "test", "event": "started", "name": "independent_formulas_large" }
+{ "type": "bench", "name": "independent_formulas_large", "median": 320503983, "deviation": 2624890.569999993 }
+{ "type": "test", "event": "started", "name": "one_formula" }
+{ "type": "bench", "name": "one_formula", "median": 322159.575, "deviation": 6989.40499999997 }
+{ "type": "test", "event": "started", "name": "one_string" }
+{ "type": "bench", "name": "one_string", "median": 1270.691393442623, "deviation": 90.68519125683042 }
+{ "type": "test", "event": "started", "name": "same_formula_large" }
+{ "type": "bench", "name": "same_formula_large", "median": 323754115.8, "deviation": 6564713.610000014 }
+{ "type": "test", "event": "started", "name": "same_string_large" }
+{ "type": "bench", "name": "same_string_large", "median": 855465.8999999999, "deviation": 27193.579999999958 }
+{ "type": "test", "event": "started", "name": "strings_large" }
+{ "type": "bench", "name": "strings_large", "median": 874424.6, "deviation": 97452.07999999984 }
+{ "type": "suite", "event": "ok", "passed": 0, "failed": 0, "ignored": 0, "measured": 9, "filtered_out": 0, "exec_time": 547.27725926 }

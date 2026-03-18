@@ -1,6 +1,6 @@
 [package]
 name = "bight"
-version = "0.1.8-b"
+version = "0.1.9-a"
 edition = "2024"
 authors = [
   "WASDetchan",
