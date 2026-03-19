@@ -1,5 +1,12 @@
 $ cargo +nightly bench -p bight
-     Running benches/evaluator.rs (target/release/deps/evaluator-6f2c502d7553ff45)
+running 4 tests
+test evaluator::test::format_number ... ignored
+test evaluator::test::format_string ... ignored
+test file::csv::test::csv ... ignored
+test file::csv::test::cyrillic ... ignored
+
+test result: ok. 0 passed; 0 failed; 4 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
 
 running 9 tests
 test big_coord_formulas_large   ... bench: 374,556,995.10 ns/iter (+/- 2,750,183.27)

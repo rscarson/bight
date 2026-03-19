@@ -19,6 +19,8 @@ pub mod file;
 pub mod sync;
 pub mod table;
 
+mod pool;
+
 #[cfg(feature = "plot")]
 pub mod plot;
 

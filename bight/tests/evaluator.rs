@@ -1,4 +1,4 @@
-use bight::{evaluator::EvaluatorTable, table::Table};
+use bight::{evaluator::EvaluatorTable, sync::RcStr, table::Table};
 
 #[test]
 #[should_panic]
@@ -182,4 +182,66 @@ fn dependency_cycle() {
         dc.to_lowercase().contains("dependency cycle"),
         "{dc} doesn't contain \"dependency cycle\"",
     );
+}
+
+#[test]
+fn global_is_different() {
+    let mut evaluator = EvaluatorTable::default();
+
+    let source: RcStr = r#"=(function()
+  if _G.x == 1 then
+     error("ohno!!! ")
+  else
+    _G.x = 1
+    x = 1
+  end
+  return x
+end)()"#
+        .into();
+
+    for i in 0..10 {
+        evaluator.set_source((i, i), Some(source.clone()));
+    }
+
+    for _ in 0..1000 {
+        evaluator.evaluate();
+        for i in 0..10 {
+            assert_eq!(
+                evaluator.get((i, i).into()),
+                Some(bight::evaluator::TableValue::Number(1.0)).as_ref()
+            );
+        }
+    }
+}
+
+/// This test is failing to demonstare the problem described in issue #8
+#[test]
+#[ignore = "fails, see issue #8"]
+fn global_math_is_different() {
+    let mut evaluator = EvaluatorTable::default();
+
+    let source: RcStr = r#"=(function()
+  if _G.math.x == 1 then
+     error("ohno!!! ")
+  else
+    _G.math.x = 1
+    math.x = 1
+  end
+  return math.x
+end)()"#
+        .into();
+
+    for i in 0..10 {
+        evaluator.set_source((i, i), Some(source.clone()));
+    }
+
+    for _ in 0..1000 {
+        evaluator.evaluate();
+        for i in 0..10 {
+            assert_eq!(
+                evaluator.get((i, i).into()),
+                Some(bight::evaluator::TableValue::Number(1.0)).as_ref()
+            );
+        }
+    }
 }

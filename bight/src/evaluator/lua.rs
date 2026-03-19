@@ -1,11 +1,39 @@
-use std::{marker::PhantomData, pin::Pin};
+use std::{cell::RefCell, pin::Pin};
 
-use mlua::{FromLua, FromLuaMulti, IntoLua, IntoLuaMulti, Lua};
+use mlua::{FromLua, IntoLua, Lua};
 
 use crate::{
     evaluator::{TableError, TableValue, interaction::CellInfo},
+    pool,
     table::cell::CellPos,
 };
+
+struct LuaVM {
+    lua: mlua::Lua,
+}
+
+struct LuaManager {}
+
+impl pool::Manager for LuaManager {
+    type Type = LuaVM;
+    fn create(&self) -> Self::Type {
+        let lua = mlua::Lua::new();
+
+        lua.load(include_str!("../prelude.lua"))
+            .exec()
+            .expect("Prelude is valid and known at compile time");
+
+        let convert_pos = lua.create_function(|_, val: CellPos| Ok(val)).unwrap();
+        lua.globals().set("CELL_POS", convert_pos).unwrap();
+
+        LuaVM { lua }
+    }
+}
+
+thread_local! {
+    static LUA_POOL : RefCell<pool::Pool<LuaVM, LuaManager>> =
+        const { RefCell::new(pool::Pool::new(LuaManager {})) };
+}
 
 #[cfg(not(feature = "multi-thread"))]
 type TableLuaBoxFuture<'a, V> = Pin<Box<dyn Future<Output = mlua::Result<V>> + 'a>>;
@@ -25,61 +53,62 @@ fn pos<'a>(info: &'a CellInfo<'a>) -> TableBoxFn<'a, (), CellPos> {
     Box::new(move |_lua, _| Box::pin(async move { Ok(info.pos()) }))
 }
 
-unsafe fn trust_me_bro(info: &CellInfo) -> &'static CellInfo<'static> {
-    // clippy warns about 2 identical casts here but his fix suggestion doesn't work
-    #[allow(clippy::unnecessary_cast)]
-    unsafe {
-        &*(info as *const _ as *const CellInfo<'static>)
-    }
-}
-
-pub struct CellEvaluator<'a> {
-    lua: Lua,
-    info: &'static CellInfo<'static>,
-    _phantom_info: PhantomData<&'a CellInfo<'a>>,
-}
-
-impl<'a> CellEvaluator<'a> {
-    fn new(info: &'a CellInfo<'a>, lua: Lua) -> Self {
-        let info = unsafe { trust_me_bro(info) };
-
-        Self {
-            lua,
-            info,
-            _phantom_info: PhantomData,
-        }
-    }
-    fn add_global_fn<T: FromLuaMulti + 'static, V: IntoLuaMulti + 'static>(
-        &mut self,
-        name: &str,
-        f: impl Fn(&'static CellInfo<'static>) -> TableBoxFn<'static, T, V>,
-    ) {
-        let f = self.lua.create_async_function(f(self.info)).unwrap();
-        self.lua.globals().set(name, f).unwrap();
-    }
-
-    async fn evaluate(&mut self, source: &str) -> mlua::Result<TableValue> {
-        let chunk = self.lua.load(source);
-        chunk.eval_async::<TableValue>().await
-    }
-}
-
 pub async fn evaluate<'a>(source: &str, info: &'a CellInfo<'a>) -> TableValue {
-    let lua = Lua::new();
-    lua.load(include_str!("../prelude.lua"))
-        .exec()
-        .expect("Prelude is valid and known at compile time");
+    // Acquire a VM from thread-local pool
+    let lua_vm = LUA_POOL.with_borrow_mut(|pool| pool.get());
+    let lua = &lua_vm.lua;
 
-    let convert_pos = lua.create_function(|_, val: CellPos| Ok(val)).unwrap();
+    // Safety: info is only used for its original lifetime. All references to info are deleted in
+    // this function.
+    // 2 globals (THIS_POS and GET are removed explicitly, everything else is cleared beacuse the
+    //   chunk cannot modify global environment
+    let info = unsafe {
+        #[allow(
+            clippy::unnecessary_cast,
+            reason = "clippy warns about 2 identical casts here but his fix suggestion doesn't work"
+        )]
+        &*(info as *const _ as *const CellInfo<'static>)
+    };
 
-    lua.globals().set("CELL_POS", convert_pos).unwrap();
+    lua.globals()
+        .set("THIS_POS", lua.create_async_function(pos(info)).unwrap())
+        .unwrap();
 
-    let mut ev = CellEvaluator::new(info, lua);
+    lua.globals()
+        .set("GET", lua.create_async_function(get(info)).unwrap())
+        .unwrap();
 
-    ev.add_global_fn("THIS_POS", pos);
-    ev.add_global_fn("GET", get);
+    let env = lua.create_table().unwrap();
 
-    let res = ev.evaluate(source).await;
+    let env_meta = lua.create_table().unwrap();
+
+    {
+        let env = env.clone();
+        let globals = lua.globals().clone();
+        env_meta
+            .set(
+                mlua::MetaMethod::Index.name(),
+                lua.create_function(move |_, (_, index): (mlua::Value, String)| {
+                    if index == "_G" {
+                        Ok(mlua::Value::Table(env.clone()))
+                    } else {
+                        globals.get::<mlua::Value>(index)
+                    }
+                })
+                .unwrap(),
+            )
+            .unwrap();
+    }
+
+    env.set_metatable(Some(env_meta)).unwrap();
+
+    let chunk = lua.load(source).set_environment(env);
+    let res = chunk.eval_async::<TableValue>().await;
+
+    // Clean up VM and return to the pool
+    lua.globals().set("THIS_POS", mlua::Value::Nil).unwrap();
+    lua.globals().set("GET", mlua::Value::Nil).unwrap();
+    LUA_POOL.with_borrow_mut(|pool| pool.put(lua_vm));
 
     res.unwrap_or_else(TableValue::lua_error)
 }
