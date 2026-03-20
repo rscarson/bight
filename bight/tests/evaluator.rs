@@ -245,3 +245,63 @@ end)()"#
         }
     }
 }
+
+/// This test is causing UB to demonstare the problem described in issue #8
+#[test]
+#[ignore = "causes UB, see issue #8"]
+fn getter_is_not_passable_between_evaluations() {
+    fn some_evalution() {
+        let mut evaluator = EvaluatorTable::default();
+
+        let source: RcStr = r#"=(function()
+      if _G.math.get  then
+        return _G.math.get(100, 100) or 1.0
+      else
+        _G.math.get = GET
+      end
+      return 1.0
+    end)()"#
+            .into();
+
+        evaluator.set_source((0, 0), Some(source.clone()));
+
+        evaluator.evaluate();
+        assert_eq!(
+            evaluator.get((0, 0).into()),
+            Some(bight::evaluator::TableValue::Number(1.0)).as_ref()
+        );
+    }
+    fn another_evalution() {
+        let mut evaluator = EvaluatorTable::default();
+
+        let source: RcStr = r#"=(function()
+      if _G.math.get  then
+        return _G.math.get(100, 100) or 1.0
+      end
+      return 1.0
+    end)()"#
+            .into();
+
+        evaluator.set_source((100, 100), Some("ohno"));
+
+        // Bigger table so relocation is more likely (to cause segfault)
+        for i in 0..10 {
+            evaluator.set_source((i, i), Some(source.clone()));
+        }
+
+        // May not set to large number as it leaks memory
+        for _ in 0..10 {
+            evaluator.invalidate_all_cells();
+            evaluator.evaluate();
+            for i in 0..10 {
+                assert_eq!(
+                    evaluator.get((i, i).into()),
+                    Some(bight::evaluator::TableValue::Number(1.0)).as_ref()
+                );
+            }
+        }
+    }
+
+    some_evalution();
+    another_evalution();
+}

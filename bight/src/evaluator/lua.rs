@@ -58,7 +58,7 @@ pub async fn evaluate<'a>(source: &str, info: &'a CellInfo<'a>) -> TableValue {
     let lua_vm = LUA_POOL.with_borrow_mut(|pool| pool.get());
     let lua = &lua_vm.lua;
 
-    // Safety: info is only used for its original lifetime. All references to info are deleted in
+    // Safety: info is only used for its original lifetime (this is a lie). All references to info are deleted in
     // this function.
     // 2 globals (THIS_POS and GET are removed explicitly, everything else is cleared beacuse the
     //   chunk cannot modify global environment
