@@ -58,7 +58,7 @@ pub async fn evaluate<'a>(source: &str, info: &'a CellInfo<'a>) -> TableValue {
     let lua_vm = LUA_POOL.with_borrow_mut(|pool| pool.get());
     let lua = &lua_vm.lua;
 
-    // Safety: info is only used for its original lifetime (this is a lie). All references to info are deleted in
+    // Safety: info is only used for its original lifetime. All references to info are deleted in
     // this function.
     // 2 globals (THIS_POS and GET are removed explicitly, everything else is cleared beacuse the
     //   chunk cannot modify global environment
@@ -78,29 +78,10 @@ pub async fn evaluate<'a>(source: &str, info: &'a CellInfo<'a>) -> TableValue {
         .set("GET", lua.create_async_function(get(info)).unwrap())
         .unwrap();
 
-    let env = lua.create_table().unwrap();
-
-    let env_meta = lua.create_table().unwrap();
-
-    {
-        let env = env.clone();
-        let globals = lua.globals().clone();
-        env_meta
-            .set(
-                mlua::MetaMethod::Index.name(),
-                lua.create_function(move |_, (_, index): (mlua::Value, String)| {
-                    if index == "_G" {
-                        Ok(mlua::Value::Table(env.clone()))
-                    } else {
-                        globals.get::<mlua::Value>(index)
-                    }
-                })
-                .unwrap(),
-            )
-            .unwrap();
-    }
-
-    env.set_metatable(Some(env_meta)).unwrap();
+    let env = lua
+        .load("__MAKE_READONLY(_G)")
+        .eval::<mlua::Table>()
+        .expect("__MAKE_READONLY is defined in the prelude");
 
     let chunk = lua.load(source).set_environment(env);
     let res = chunk.eval_async::<TableValue>().await;

@@ -48,3 +48,22 @@ LG = math.log10
 SQRT = math.sqrt
 POW = math.pow
 EXP = math.exp
+
+function __MAKE_READONLY(t, seen)
+  seen = seen or {}
+  if seen[t] then return seen[t] end
+  local proxy = {}
+  seen[t] = proxy
+  setmetatable(proxy, {
+    __index = function(p, k)
+      local v = t[k]
+      if type(v) == "table" then
+        local nested = __MAKE_READONLY(v, seen)
+        rawset(p, k, nested)
+        return nested
+      end
+      return v
+    end
+  })
+  return proxy
+end

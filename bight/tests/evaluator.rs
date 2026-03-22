@@ -214,9 +214,8 @@ end)()"#
     }
 }
 
-/// This test is failing to demonstare the problem described in issue #8
+/// This test was used to demonstare the problem described in issue #8
 #[test]
-#[ignore = "fails, see issue #8"]
 fn global_math_is_different() {
     let mut evaluator = EvaluatorTable::default();
 
@@ -246,9 +245,8 @@ end)()"#
     }
 }
 
-/// This test is causing UB to demonstare the problem described in issue #8
+/// This test was used to demonstare the problem described in issue #8
 #[test]
-#[ignore = "causes UB, see issue #8"]
 fn getter_is_not_passable_between_evaluations() {
     fn some_evalution() {
         let mut evaluator = EvaluatorTable::default();
